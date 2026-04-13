@@ -1,0 +1,47 @@
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: CloudEventSigningConsumerPolicy
+metadata:
+  name: bob-verification-policy
+  namespace: bu-bob
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+spec:
+  trustedNamespaces:
+    - bu-alice
+    - bu-eve
+  rejectUnsigned: true
+  consumers:
+    - name: alice-event-consumer
+      broker: bob-broker
+      filter:
+        type: dev.ce-signing.alice.produced
+      subscriber:
+        ref:
+          apiVersion: v1
+          kind: Service
+          name: event-display
+    - name: eve-event-consumer
+      broker: bob-broker
+      filter:
+        type: dev.ce-signing.eve.produced
+      subscriber:
+        ref:
+          apiVersion: v1
+          kind: Service
+          name: event-display
+  proxy:
+    image: ghcr.io/nrrso/ce-signing-proxy:a6d4ad32
+    resources:
+      limits: 
+        cpu: 250m
+        memory: 512Mi
+      requests: 
+        cpu: 100m
+        memory: 256Mi
+    replicas: 1
+    hpa:
+      enabled: false
+    env:
+      CE_SIGNING_LOG_LEVEL: DEBUG
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring:4317"
+      QUARKUS_OTEL_SDK_DISABLED: "true"

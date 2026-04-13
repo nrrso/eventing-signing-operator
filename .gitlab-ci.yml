@@ -1,0 +1,81 @@
+stages:
+  - build
+  - publish-chart
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  REGISTRY: "registry.nas.solid.dev"
+  REGISTRY_GROUP: "public"
+
+default:
+  image: maven:3.9.9-eclipse-temurin-21
+  tags:
+    - homelab
+  cache:
+    key: maven-cache
+    paths:
+      - .m2/repository
+
+build_ce-signing-proxy:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - ce-signing-proxy/**/*
+        - pom.xml
+  timeout: 20 minutes
+  retry: 2
+  script:
+    - >
+      mvn -B package -pl ce-signing-proxy -am
+      -DskipTests
+      -Dquarkus.container-image.build=true
+      -Dquarkus.container-image.push=true
+      -Dquarkus.container-image.registry=$REGISTRY
+      -Dquarkus.container-image.group=$REGISTRY_GROUP
+      -Dquarkus.container-image.name=ce-signing-proxy
+      -Dquarkus.container-image.tag=$CI_COMMIT_SHORT_SHA
+      -Dquarkus.container-image.additional-tags=latest
+      -Dquarkus.container-image.username=$PRJ_REGISTRY_USERNAME
+      -Dquarkus.container-image.password=$PRJ_REGISTRY_PASSWORD
+
+build_ce-signing-operator:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - ce-signing-operator/**/*
+        - pom.xml
+  timeout: 20 minutes
+  retry: 2
+  script:
+    - >
+      mvn -B package -pl ce-signing-operator -am
+      -DskipTests
+      -Dquarkus.container-image.build=true
+      -Dquarkus.container-image.push=true
+      -Dquarkus.container-image.registry=$REGISTRY
+      -Dquarkus.container-image.group=$REGISTRY_GROUP
+      -Dquarkus.container-image.name=ce-signing-operator
+      -Dquarkus.container-image.tag=$CI_COMMIT_SHORT_SHA
+      -Dquarkus.container-image.additional-tags=latest
+      -Dquarkus.container-image.username=$PRJ_REGISTRY_USERNAME
+      -Dquarkus.container-image.password=$PRJ_REGISTRY_PASSWORD
+  artifacts:
+    paths:
+      - ce-signing-operator/target/helm/kubernetes/ce-signing-operator/
+
+publish_helm_chart:
+  stage: publish-chart
+  image: alpine/helm:3.17.3
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - ce-signing-operator/**/*
+        - pom.xml
+  needs:
+    - build_ce-signing-operator
+  script:
+    - helm registry login $REGISTRY -u $PRJ_REGISTRY_USERNAME -p $PRJ_REGISTRY_PASSWORD
+    - helm package ce-signing-operator/target/helm/kubernetes/ce-signing-operator/ --version 1.0.0-${CI_COMMIT_SHORT_SHA}
+    - helm push ce-signing-operator-1.0.0-${CI_COMMIT_SHORT_SHA}.tgz oci://$REGISTRY/$REGISTRY_GROUP

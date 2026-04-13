@@ -1,0 +1,55 @@
+---
+# Additional ClusterRole rules for resources managed in reconcile() (not as JOSDK dependents)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ce-signing-operator-additional
+rules:
+  # PublicKeyRegistry (managed by ProducerPolicyReconciler in reconcile())
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["publickeyregistries"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Knative Sequences (managed by ProducerPolicyReconciler in reconcile())
+  - apiGroups: ["flows.knative.dev"]
+    resources: ["sequences"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Knative Triggers (managed by ConsumerPolicyReconciler in reconcile())
+  - apiGroups: ["eventing.knative.dev"]
+    resources: ["triggers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ServiceAccounts for verifier proxy (managed by ConsumerPolicyReconciler dependents)
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ClusterRoleBindings for verifier proxy (managed by ConsumerPolicyReconciler dependents)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Kubernetes Events (emitted by ErrorStatusHandler and EventHelper)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ce-signing-operator-additional
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ce-signing-operator-additional
+subjects:
+  - kind: ServiceAccount
+    name: ce-signing-operator
+    # Must match quarkus.kubernetes.namespace / CE_SIGNING_NAMESPACE at deploy time
+    namespace: ce-signing-system
+---
+# Verifier ClusterRole (read-only access to PublicKeyRegistry for proxy in verify mode)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ce-signing-verifier
+rules:
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["publickeyregistries"]
+    verbs: ["get", "list", "watch"]

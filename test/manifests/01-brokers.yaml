@@ -1,0 +1,83 @@
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: alice-broker
+  namespace: bu-alice
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+---
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: bob-broker
+  namespace: bu-bob
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+---
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: eve-broker
+  namespace: bu-eve
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+---
+# Alice events → Bob
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: forward-to-bob
+  namespace: bu-alice
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+spec:
+  broker: alice-broker
+  filter:
+    attributes:
+      type: dev.ce-signing.alice.produced
+  subscriber:
+    ref:
+      apiVersion: eventing.knative.dev/v1
+      kind: Broker
+      name: bob-broker
+      namespace: bu-bob
+---
+# Alice events → Eve
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: forward-to-eve
+  namespace: bu-alice
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+spec:
+  broker: alice-broker
+  filter:
+    attributes:
+      type: dev.ce-signing.alice.produced
+  subscriber:
+    ref:
+      apiVersion: eventing.knative.dev/v1
+      kind: Broker
+      name: eve-broker
+      namespace: bu-eve
+---
+# Eve events → Bob
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: forward-to-bob
+  namespace: bu-eve
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+spec:
+  broker: eve-broker
+  filter:
+    attributes:
+      type: dev.ce-signing.eve.produced
+  subscriber:
+    ref:
+      apiVersion: eventing.knative.dev/v1
+      kind: Broker
+      name: bob-broker
+      namespace: bu-bob

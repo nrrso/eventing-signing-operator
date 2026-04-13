@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bu-alice
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+    eventing.knative.dev/injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bu-bob
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+    eventing.knative.dev/injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bu-eve
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+    eventing.knative.dev/injection: enabled

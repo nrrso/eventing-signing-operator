@@ -1,0 +1,146 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: cloudeventsigningproducerpolicies.ce-signing.platform.io
+spec:
+  group: ce-signing.platform.io
+  scope: Namespaced
+  names:
+    plural: cloudeventsigningproducerpolicies
+    singular: cloudeventsigningproducerpolicy
+    kind: CloudEventSigningProducerPolicy
+    shortNames: [cespp]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                canonicalAttributes:
+                  type: array
+                  items:
+                    type: string
+                  default: [type, source, subject, datacontenttype]
+                producers:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, reply]
+                    properties:
+                      name:
+                        type: string
+                      reply:
+                        type: object
+                        properties:
+                          ref:
+                            type: object
+                            properties:
+                              apiVersion:
+                                type: string
+                                default: "eventing.knative.dev/v1"
+                              kind:
+                                type: string
+                                default: "Broker"
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                keyRotation:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    intervalDays:
+                      type: integer
+                      default: 90
+                    gracePeriodDays:
+                      type: integer
+                      default: 7
+                proxy:
+                  type: object
+                  properties:
+                    image:
+                      type: string
+                      default: "ghcr.io/nrrso/ce-signing-proxy:latest"
+                    replicas:
+                      type: integer
+                      default: 2
+                    resources:
+                      type: object
+                      properties:
+                        requests:
+                          type: object
+                          properties:
+                            cpu: { type: string, default: "50m" }
+                            memory: { type: string, default: "64Mi" }
+                        limits:
+                          type: object
+                          properties:
+                            cpu: { type: string, default: "200m" }
+                            memory: { type: string, default: "128Mi" }
+                    hpa:
+                      type: object
+                      properties:
+                        enabled: { type: boolean, default: true }
+                        minReplicas: { type: integer, default: 2 }
+                        maxReplicas: { type: integer, default: 10 }
+                        targetCPUUtilization: { type: integer, default: 70 }
+                    topologySpreadConstraints:
+                      type: object
+                      properties:
+                        enabled: { type: boolean, default: true }
+                        maxSkew: { type: integer, default: 1 }
+                        topologyKey: { type: string, default: "topology.kubernetes.io/zone" }
+                    env:
+                      type: object
+                      description: Additional environment variables to pass to the proxy container
+                      additionalProperties:
+                        type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      status: { type: string, enum: ["True", "False", "Unknown"] }
+                      reason: { type: string }
+                      message: { type: string }
+                      lastTransitionTime: { type: string, format: date-time }
+                keyId:
+                  type: string
+                keyCreated:
+                  type: string
+                  format: date-time
+                keyExpiresAt:
+                  type: string
+                  format: date-time
+                producers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      signingEndpoint: { type: string }
+                lastReconciled: { type: string, format: date-time }
+                observedGeneration: { type: integer }
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: ".status.conditions[?(@.type=='Ready')].status"
+        - name: KeyId
+          type: string
+          jsonPath: .status.keyId
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

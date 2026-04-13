@@ -1,0 +1,39 @@
+apiVersion: sources.knative.dev/v1
+kind: ContainerSource
+metadata:
+  name: eve-event-source
+  namespace: bu-eve
+  labels:
+    app.kubernetes.io/part-of: ce-signing-test
+spec:
+  template:
+    spec:
+      containers:
+        - image: curlimages/curl:8.12.1
+          name: event-producer
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              i=0
+              while true; do
+                i=$((i+1))
+                curl -sf -X POST "$K_SINK" \
+                  -H "Content-Type: application/json" \
+                  -H "Ce-Id: eve-$HOSTNAME-$i" \
+                  -H "Ce-Specversion: 1.0" \
+                  -H "Ce-Type: $CE_TYPE" \
+                  -H "Ce-Source: $CE_SOURCE" \
+                  -d "{\"seq\":$i,\"message\":\"Hello from Eve\"}" \
+                  && echo "sent event $i" || echo "failed event $i"
+                sleep 60
+              done
+          env:
+            - name: CE_TYPE
+              value: "dev.ce-signing.eve.produced"
+            - name: CE_SOURCE
+              value: "/bu-eve/event-producer"
+  sink:
+    ref:
+      apiVersion: flows.knative.dev/v1
+      kind: Sequence
+      name: eve-event-source-signing-seq

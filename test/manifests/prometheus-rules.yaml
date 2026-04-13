@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ce-signing-alerts
+  labels:
+    app.kubernetes.io/name: ce-signing-platform
+spec:
+  groups:
+    - name: ce-signing
+      rules:
+        - alert: CeSigningVerificationFailureRateHigh
+          expr: |
+            sum(rate(ce_signing_events_total{mode="verify",status="rejected"}[5m]))
+            / sum(rate(ce_signing_events_total{mode="verify"}[5m]))
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CloudEvent verification failure rate > 5%"
+            description: "More than 5% of verified events are being rejected. Check for key rotation issues or untrusted namespaces."
+
+        - alert: CeSigningKeyExpiringSoon
+          expr: |
+            (ce_signing_key_expires_at - time()) / 86400 < 7
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "CloudEvent signing key expiring within 7 days"
+            description: "A signing key will expire soon. Verify that key rotation is functioning."
+
+        - alert: CeSigningProxyDown
+          expr: |
+            up{job=~".*ce-signer.*|.*ce-verifier.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CloudEvent signing/verifying proxy is down"
+            description: "A ce-signing-proxy instance has been down for > 2 minutes."
+
+        - alert: CeSigningRegistryNotSynced
+          expr: |
+            ce_signing_registry_synced == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Verifier registry cache not synced"
+            description: "A verifier pod's registry cache has not synced for > 5 minutes. Events may be incorrectly rejected."

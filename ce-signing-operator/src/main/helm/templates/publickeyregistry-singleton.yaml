@@ -1,0 +1,7 @@
+---
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: PublicKeyRegistry
+metadata:
+  name: ce-signing-registry
+spec:
+  entries: []

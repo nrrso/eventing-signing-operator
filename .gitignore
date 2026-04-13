@@ -1,0 +1,41 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Coding Agents
+.agents
+.claude
+.codex
+.gemini
+openspec
+skills-lock.json
+CLAUDE.md
+AGENTS.md
+
+# Quarkus
+.quarkus/
+
+# Env
+.env
+
+# TLA+ / TLC model checker
+states/
+*.tlc

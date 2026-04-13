@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Install the kn-quickstart plugin for the current OS/arch"
+set -euo pipefail
+
+VERSION="${KN_QUICKSTART_VERSION:-knative-v1.21.0}"
+INSTALL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/kn/plugins"
+
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+case "$ARCH" in
+  x86_64)  ARCH="amd64" ;;
+  aarch64) ARCH="arm64" ;;
+  arm64)   ARCH="arm64" ;;
+  *)       echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+esac
+
+case "$OS" in
+  darwin|linux) ;;
+  *)            echo "Unsupported OS: $OS" >&2; exit 1 ;;
+esac
+
+BINARY="kn-quickstart-${OS}-${ARCH}"
+URL="https://github.com/knative-extensions/kn-plugin-quickstart/releases/download/${VERSION}/${BINARY}"
+
+echo "Installing kn-quickstart ${VERSION} (${OS}/${ARCH})..."
+mkdir -p "$INSTALL_DIR"
+curl -fsSL "$URL" -o "${INSTALL_DIR}/kn-quickstart"
+chmod +x "${INSTALL_DIR}/kn-quickstart"
+echo "Installed to ${INSTALL_DIR}/kn-quickstart"
+kn plugin list
