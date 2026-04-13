@@ -10,6 +10,7 @@ Transparent Ed25519 signing and verification for [CloudEvents](https://cloudeven
 - **Automatic key rotation** — configurable interval with grace period for zero-downtime rollover
 - **Kubernetes-native** — CRD-driven configuration, Helm deployment, Prometheus metrics
 - **Transparent to applications** — signing and verification happen in Knative Sequence steps
+- **Formally verified** — TLA+ models check reconciler concurrency (4 bugs found and fixed)
 
 ## Architecture
 
@@ -39,7 +40,8 @@ Four extension attributes are added to signed events: `cesignature`, `cesignatur
 ## Prerequisites
 
 - Java 21
-- Maven 3.9.9 (or use the included Maven wrapper: `./mvnw`)
+- Maven 3.9+ (or use the included Maven wrapper: `./mvnw`)
+- Docker (for local development with kind)
 - Kubernetes cluster with [Knative Eventing](https://knative.dev/docs/install/) installed (for deployment)
 - Helm 3.x (for deployment)
 
@@ -69,26 +71,54 @@ Tool versions can be managed via [mise](https://mise.jdx.dev/): run `mise instal
 
 ## Development
 
+A `Makefile` drives the local dev flow: build images, spin up a kind cluster with Knative, deploy via Helm, and apply test scenarios.
+
 ```bash
-# Proxy dev mode
-./mvnw quarkus:dev -pl ce-signing-proxy
+# Full flow from scratch — creates kind cluster, builds images, deploys operator + test scenarios
+make dev
 
-# Operator dev mode
-./mvnw quarkus:dev -pl ce-signing-operator
+# Inner loop — rebuild images, upgrade Helm release, restart pods
+make rebuild
 
-# Run a single test class
-./mvnw test -pl ce-signing-proxy -Dtest=CanonicalFormTest
+# Tear down cluster and local registry
+make clean
 ```
 
-## Deployment
+### Individual targets
 
 ```bash
-# Build operator (generates Helm chart + container image)
-./mvnw verify -pl ce-signing-operator -Dquarkus.container-image.build=true
+make registry          # Start local container registry on :5001
+make build             # Build + push images to local registry
+make cluster           # Create kind cluster with Knative Eventing
+make connect           # Connect registry to kind network
+make prometheus-crds   # Install ServiceMonitor CRD
+make install           # Helm install operator
+make upgrade           # Helm upgrade operator
+make apply             # Apply test scenarios (kubectl apply -k test/overlays/local)
+```
 
-# Install via generated Helm chart
-helm install ce-signing ce-signing-operator/target/helm/kubernetes/ce-signing-operator/ \
-  -n ce-signing-system --create-namespace
+### Observability
+
+```bash
+make logs              # Tail operator + event-display logs
+make status            # Show pods, nodes, and PublicKeyRegistry state
+```
+
+### Quarkus dev mode
+
+```bash
+./mvnw quarkus:dev -pl ce-signing-proxy      # Proxy dev mode
+./mvnw quarkus:dev -pl ce-signing-operator    # Operator dev mode
+```
+
+### Running tests
+
+```bash
+./mvnw test                                           # All unit tests
+./mvnw test -pl ce-signing-proxy                      # Proxy tests only
+./mvnw test -pl ce-signing-operator                   # Operator tests only
+./mvnw verify                                         # Includes integration tests
+./mvnw test -pl ce-signing-proxy -Dtest=CanonicalFormTest  # Single test class
 ```
 
 ## Quick Start
@@ -156,15 +186,15 @@ kubectl get cepkr             # Public key registry
 
 ## Documentation
 
-- [Architecture overview](docs/architecture.md)
-- [Onboarding guide](docs/onboarding.md)
-- [Design document](docs/design-doc.md)
-- [Cross-namespace scenario](docs/uc1-cross-bu-scenario.md)
+- [Architecture overview](docs/ARCHITECTURE.md)
+- [Design document](docs/DESIGN.md)
+- [Control plane & data plane flows](docs/FLOWCHART.md)
+- [Formal verification with TLA+](docs/tlaplus-info.md)
 
 ## Tech Stack
 
-- **Java 21**, **Quarkus 3.15.1**, **Maven** (multi-module)
-- **JOSDK 6.8.4** (operator SDK), **Fabric8** (Kubernetes client)
+- **Java 21**, **Quarkus 3.33**, **Maven** (multi-module)
+- **Quarkus Operator SDK 7.7** (JOSDK), **Fabric8** (Kubernetes client)
 - **BouncyCastle 1.78** (Ed25519), **CloudEvents SDK 4.0.1**
 - **java-json-canonicalization 1.1** (RFC 8785 JCS)
 - **Micrometer + Prometheus**, **OpenTelemetry**, **SmallRye Health**
