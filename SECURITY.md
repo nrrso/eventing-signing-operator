@@ -19,9 +19,9 @@ Include as much detail as possible:
 - Description of the issue
 - Steps to reproduce
 - Affected versions
-- Potential impact
+- Potential impact 
 
-You should expect an initial response within 72 hours. We will work with you to understand the issue and coordinate a fix before any public disclosure.
+You should expect an initial response within 72 hours. I will work with you to understand the issue and coordinate a fix before any public disclosure.
 
 ## Scope
 
@@ -32,6 +32,8 @@ This project handles cryptographic key material (Ed25519 signing keys). Issues i
 - Key rotation failures
 - Registry tampering
 
+Please make sure you are familiar with the project and its architecture before disclosing a security issue. 
+
 ## Disclosure Policy
 
-I follow coordinated disclosure. Once a fix is available, we will publish a security advisory and credit the reporter (unless they prefer to remain anonymous).
+This repo follows coordinated disclosure. Once a fix is available, I will publish a security advisory and credit the reporter (unless they prefer to remain anonymous).
