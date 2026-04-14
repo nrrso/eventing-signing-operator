@@ -1,43 +1,46 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.platform.cesigning.operator.crd.DestinationRef;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("unchecked")
 class KnativeResourceHelperTest {
 
-    private final OwnerReference ownerRef = new OwnerReferenceBuilder()
-            .withApiVersion("ce-signing.platform.io/v1alpha1")
-            .withKind("CloudEventSigningProducerPolicy")
-            .withName("test-policy")
-            .withUid("uid-123")
-            .withController(true)
-            .build();
+    private final OwnerReference ownerRef =
+            new OwnerReferenceBuilder()
+                    .withApiVersion("ce-signing.platform.io/v1alpha1")
+                    .withKind("CloudEventSigningProducerPolicy")
+                    .withName("test-policy")
+                    .withUid("uid-123")
+                    .withController(true)
+                    .build();
 
     @Test
     void buildSigningSequenceStructure() {
-        DestinationRef reply = createDestinationRef("eventing.knative.dev/v1", "Broker", "alice-broker", "bu-alice");
+        DestinationRef reply =
+                createDestinationRef(
+                        "eventing.knative.dev/v1", "Broker", "alice-broker", "bu-alice");
 
-        GenericKubernetesResource seq = KnativeResourceHelper.buildSigningSequence(
-                "cloudevents-player", "bu-alice", "ce-signer", reply, ownerRef);
+        GenericKubernetesResource seq =
+                KnativeResourceHelper.buildSigningSequence(
+                        "cloudevents-player", "bu-alice", "ce-signer", reply, ownerRef);
 
         assertEquals("flows.knative.dev/v1", seq.getApiVersion());
         assertEquals("Sequence", seq.getKind());
         assertEquals("cloudevents-player-signing-seq", seq.getMetadata().getName());
         assertEquals("bu-alice", seq.getMetadata().getNamespace());
-        assertEquals("ce-signing-operator",
+        assertEquals(
+                "ce-signing-operator",
                 seq.getMetadata().getLabels().get("app.kubernetes.io/managed-by"));
-        assertEquals("signer",
-                seq.getMetadata().getLabels().get("app.kubernetes.io/component"));
+        assertEquals("signer", seq.getMetadata().getLabels().get("app.kubernetes.io/component"));
 
         Map<String, Object> spec = (Map<String, Object>) seq.getAdditionalProperties().get("spec");
         assertNotNull(spec);
@@ -56,10 +59,12 @@ class KnativeResourceHelperTest {
 
     @Test
     void buildVerifyingSequenceStructure() {
-        DestinationRef subscriber = createDestinationRef("v1", "Service", "cloudevents-player", null);
+        DestinationRef subscriber =
+                createDestinationRef("v1", "Service", "cloudevents-player", null);
 
-        GenericKubernetesResource seq = KnativeResourceHelper.buildVerifyingSequence(
-                "player-consumer", "bu-bob", "ce-verifier", subscriber, ownerRef);
+        GenericKubernetesResource seq =
+                KnativeResourceHelper.buildVerifyingSequence(
+                        "player-consumer", "bu-bob", "ce-verifier", subscriber, ownerRef);
 
         assertEquals("flows.knative.dev/v1", seq.getApiVersion());
         assertEquals("Sequence", seq.getKind());
@@ -81,14 +86,21 @@ class KnativeResourceHelperTest {
     void buildConsumerTriggerStructure() {
         Map<String, String> filter = Map.of("type", "com.corp.integration.user");
 
-        GenericKubernetesResource trigger = KnativeResourceHelper.buildConsumerTrigger(
-                "player-consumer", "bu-bob", "bob-broker", filter, "player-consumer-verify-seq", ownerRef);
+        GenericKubernetesResource trigger =
+                KnativeResourceHelper.buildConsumerTrigger(
+                        "player-consumer",
+                        "bu-bob",
+                        "bob-broker",
+                        filter,
+                        "player-consumer-verify-seq",
+                        ownerRef);
 
         assertEquals("eventing.knative.dev/v1", trigger.getApiVersion());
         assertEquals("Trigger", trigger.getKind());
         assertEquals("player-consumer-trigger", trigger.getMetadata().getName());
 
-        Map<String, Object> spec = (Map<String, Object>) trigger.getAdditionalProperties().get("spec");
+        Map<String, Object> spec =
+                (Map<String, Object>) trigger.getAdditionalProperties().get("spec");
         assertEquals("bob-broker", spec.get("broker"));
 
         Map<String, Object> filterMap = (Map<String, Object>) spec.get("filter");
@@ -106,7 +118,8 @@ class KnativeResourceHelperTest {
     void ownerReferenceIsSetOnAllResources() {
         DestinationRef reply = createDestinationRef("eventing.knative.dev/v1", "Broker", "b", null);
 
-        GenericKubernetesResource seq = KnativeResourceHelper.buildSigningSequence("p", "ns", "ce-signer", reply, ownerRef);
+        GenericKubernetesResource seq =
+                KnativeResourceHelper.buildSigningSequence("p", "ns", "ce-signer", reply, ownerRef);
         assertEquals(1, seq.getMetadata().getOwnerReferences().size());
         assertEquals("test-policy", seq.getMetadata().getOwnerReferences().get(0).getName());
         assertTrue(seq.getMetadata().getOwnerReferences().get(0).getController());
@@ -128,23 +141,29 @@ class KnativeResourceHelperTest {
     void signingAndVerifyingSequencesHaveDistinctComponentLabels() {
         DestinationRef dest = createDestinationRef("eventing.knative.dev/v1", "Broker", "b", null);
 
-        GenericKubernetesResource signing = KnativeResourceHelper.buildSigningSequence(
-                "p", "ns", "ce-signer", dest, ownerRef);
-        GenericKubernetesResource verifying = KnativeResourceHelper.buildVerifyingSequence(
-                "p", "ns", "ce-verifier", dest, ownerRef);
+        GenericKubernetesResource signing =
+                KnativeResourceHelper.buildSigningSequence("p", "ns", "ce-signer", dest, ownerRef);
+        GenericKubernetesResource verifying =
+                KnativeResourceHelper.buildVerifyingSequence(
+                        "p", "ns", "ce-verifier", dest, ownerRef);
 
-        assertEquals("signer", signing.getMetadata().getLabels().get("app.kubernetes.io/component"));
-        assertEquals("verifier", verifying.getMetadata().getLabels().get("app.kubernetes.io/component"));
+        assertEquals(
+                "signer", signing.getMetadata().getLabels().get("app.kubernetes.io/component"));
+        assertEquals(
+                "verifier", verifying.getMetadata().getLabels().get("app.kubernetes.io/component"));
     }
 
     @Test
     void triggerHasVerifierComponentLabel() {
-        GenericKubernetesResource trigger = KnativeResourceHelper.buildConsumerTrigger(
-                "c", "ns", "broker", null, "c-verify-seq", ownerRef);
-        assertEquals("verifier", trigger.getMetadata().getLabels().get("app.kubernetes.io/component"));
+        GenericKubernetesResource trigger =
+                KnativeResourceHelper.buildConsumerTrigger(
+                        "c", "ns", "broker", null, "c-verify-seq", ownerRef);
+        assertEquals(
+                "verifier", trigger.getMetadata().getLabels().get("app.kubernetes.io/component"));
     }
 
-    private DestinationRef createDestinationRef(String apiVersion, String kind, String name, String namespace) {
+    private DestinationRef createDestinationRef(
+            String apiVersion, String kind, String name, String namespace) {
         var ref = new DestinationRef.ObjectRef();
         ref.setApiVersion(apiVersion);
         ref.setKind(kind);

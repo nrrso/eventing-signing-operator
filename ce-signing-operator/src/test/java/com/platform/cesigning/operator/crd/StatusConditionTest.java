@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.crd;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.fabric8.kubernetes.api.model.Condition;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class StatusConditionTest {
 

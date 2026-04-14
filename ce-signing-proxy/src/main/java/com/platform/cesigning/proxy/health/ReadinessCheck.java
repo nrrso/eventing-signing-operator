@@ -14,14 +14,11 @@ import org.eclipse.microprofile.health.Readiness;
 @ApplicationScoped
 public class ReadinessCheck implements HealthCheck {
 
-    @Inject
-    ProxyConfig config;
+    @Inject ProxyConfig config;
 
-    @Inject
-    SigningHandler signingHandler;
+    @Inject SigningHandler signingHandler;
 
-    @Inject
-    RegistryKeyCache keyCache;
+    @Inject RegistryKeyCache keyCache;
 
     @Override
     public HealthCheckResponse call() {

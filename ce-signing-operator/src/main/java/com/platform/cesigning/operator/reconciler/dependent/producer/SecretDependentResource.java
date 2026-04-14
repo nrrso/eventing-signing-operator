@@ -3,15 +3,13 @@ package com.platform.cesigning.operator.reconciler.dependent.producer;
 
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicy;
 import com.platform.cesigning.operator.crypto.KeyPairGenerator;
+import com.platform.cesigning.operator.reconciler.LabelSafeTimestamp;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.Creator;
-import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
-
-import com.platform.cesigning.operator.reconciler.LabelSafeTimestamp;
-
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.OffsetDateTime;
@@ -35,8 +33,9 @@ public class SecretDependentResource
     }
 
     @Override
-    protected Secret desired(CloudEventSigningProducerPolicy primary,
-                             Context<CloudEventSigningProducerPolicy> context) {
+    protected Secret desired(
+            CloudEventSigningProducerPolicy primary,
+            Context<CloudEventSigningProducerPolicy> context) {
         String namespace = primary.getMetadata().getNamespace();
         String keyId = namespace + "-v1";
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
@@ -45,15 +44,17 @@ public class SecretDependentResource
             KeyPairGenerator.GeneratedKeyPair keyPair = KeyPairGenerator.generate();
             return new SecretBuilder()
                     .withNewMetadata()
-                        .withName(SECRET_NAME)
-                        .withNamespace(namespace)
-                        .addToLabels(KEY_ID_LABEL, keyId)
-                        .addToLabels(CREATED_AT_LABEL, LabelSafeTimestamp.encode(now))
+                    .withName(SECRET_NAME)
+                    .withNamespace(namespace)
+                    .addToLabels(KEY_ID_LABEL, keyId)
+                    .addToLabels(CREATED_AT_LABEL, LabelSafeTimestamp.encode(now))
                     .endMetadata()
                     .withType("Opaque")
-                    .addToData(PRIVATE_KEY_FIELD,
+                    .addToData(
+                            PRIVATE_KEY_FIELD,
                             Base64.getEncoder().encodeToString(keyPair.privatePem().getBytes()))
-                    .addToData(PUBLIC_KEY_FIELD,
+                    .addToData(
+                            PUBLIC_KEY_FIELD,
                             Base64.getEncoder().encodeToString(keyPair.publicPem().getBytes()))
                     .build();
         } catch (IOException e) {

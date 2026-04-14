@@ -10,15 +10,35 @@ public class ConsumerTriggerEntry {
     private Map<String, String> filter;
     private DestinationRef subscriber;
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public String getName() {
+        return name;
+    }
 
-    public String getBroker() { return broker; }
-    public void setBroker(String broker) { this.broker = broker; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public Map<String, String> getFilter() { return filter; }
-    public void setFilter(Map<String, String> filter) { this.filter = filter; }
+    public String getBroker() {
+        return broker;
+    }
 
-    public DestinationRef getSubscriber() { return subscriber; }
-    public void setSubscriber(DestinationRef subscriber) { this.subscriber = subscriber; }
+    public void setBroker(String broker) {
+        this.broker = broker;
+    }
+
+    public Map<String, String> getFilter() {
+        return filter;
+    }
+
+    public void setFilter(Map<String, String> filter) {
+        this.filter = filter;
+    }
+
+    public DestinationRef getSubscriber() {
+        return subscriber;
+    }
+
+    public void setSubscriber(DestinationRef subscriber) {
+        this.subscriber = subscriber;
+    }
 }

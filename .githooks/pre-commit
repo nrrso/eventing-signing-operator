@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "pre-commit: checking code formatting..."
+
+if ! mvn spotless:check -q 2>/dev/null; then
+    echo ""
+    echo "Formatting violations found."
+    echo "Run 'mvn spotless:apply' to fix, then re-stage and commit."
+    exit 1
+fi
+
+echo "pre-commit: formatting OK"

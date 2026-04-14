@@ -8,6 +8,11 @@ public class PublicKeyRegistrySpec {
 
     private List<PublicKeyEntry> entries = new ArrayList<>();
 
-    public List<PublicKeyEntry> getEntries() { return entries; }
-    public void setEntries(List<PublicKeyEntry> entries) { this.entries = entries; }
+    public List<PublicKeyEntry> getEntries() {
+        return entries;
+    }
+
+    public void setEntries(List<PublicKeyEntry> entries) {
+        this.entries = entries;
+    }
 }

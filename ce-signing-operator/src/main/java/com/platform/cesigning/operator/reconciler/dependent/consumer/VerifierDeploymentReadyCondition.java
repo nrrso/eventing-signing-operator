@@ -12,16 +12,19 @@ public class VerifierDeploymentReadyCondition
         implements Condition<Deployment, CloudEventSigningConsumerPolicy> {
 
     @Override
-    public boolean isMet(DependentResource<Deployment, CloudEventSigningConsumerPolicy> dependentResource,
-                         CloudEventSigningConsumerPolicy primary,
-                         Context<CloudEventSigningConsumerPolicy> context) {
-        return dependentResource.getSecondaryResource(primary, context)
-                .map(deployment -> {
-                    DeploymentStatus status = deployment.getStatus();
-                    return status != null
-                            && status.getAvailableReplicas() != null
-                            && status.getAvailableReplicas() >= 1;
-                })
+    public boolean isMet(
+            DependentResource<Deployment, CloudEventSigningConsumerPolicy> dependentResource,
+            CloudEventSigningConsumerPolicy primary,
+            Context<CloudEventSigningConsumerPolicy> context) {
+        return dependentResource
+                .getSecondaryResource(primary, context)
+                .map(
+                        deployment -> {
+                            DeploymentStatus status = deployment.getStatus();
+                            return status != null
+                                    && status.getAvailableReplicas() != null
+                                    && status.getAvailableReplicas() >= 1;
+                        })
                 .orElse(false);
     }
 }

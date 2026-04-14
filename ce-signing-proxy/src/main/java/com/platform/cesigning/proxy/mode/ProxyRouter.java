@@ -14,14 +14,11 @@ import jakarta.ws.rs.core.Response;
 @Path("/")
 public class ProxyRouter {
 
-    @Inject
-    ProxyConfig config;
+    @Inject ProxyConfig config;
 
-    @Inject
-    SigningHandler signingHandler;
+    @Inject SigningHandler signingHandler;
 
-    @Inject
-    VerifyingHandler verifyingHandler;
+    @Inject VerifyingHandler verifyingHandler;
 
     @PostConstruct
     void init() {

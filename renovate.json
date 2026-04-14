@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["maven"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["maven"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "matchManagers": ["mise"],
+      "automerge": false
+    },
+    {
+      "groupName": "quarkus",
+      "matchManagers": ["maven"],
+      "matchPackagePrefixes": ["io.quarkus"]
+    },
+    {
+      "groupName": "cloudevents",
+      "matchManagers": ["maven"],
+      "matchPackagePrefixes": ["io.cloudevents"]
+    },
+    {
+      "groupName": "operator-sdk",
+      "matchManagers": ["maven"],
+      "matchPackagePrefixes": ["io.javaoperatorsdk", "io.quarkiverse.operatorsdk"]
+    }
+  ]
+}

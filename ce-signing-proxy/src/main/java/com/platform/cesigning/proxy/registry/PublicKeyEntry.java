@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.proxy.registry;
 
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
-
 import java.time.OffsetDateTime;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 
 public record PublicKeyEntry(
         String namespace,
@@ -12,8 +11,7 @@ public record PublicKeyEntry(
         String algorithm,
         OffsetDateTime createdAt,
         OffsetDateTime expiresAt,
-        String status
-) {
+        String status) {
     public boolean isUsableForVerification() {
         return "active".equals(status) || "rotating".equals(status);
     }

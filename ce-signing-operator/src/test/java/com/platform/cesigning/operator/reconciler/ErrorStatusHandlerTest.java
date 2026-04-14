@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicyStatus;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicy;
@@ -10,19 +12,19 @@ import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class ErrorStatusHandlerTest {
 
     @Test
     void producerReconcilerImplementsReconciler() {
-        assertTrue(Reconciler.class.isAssignableFrom(ProducerPolicyReconciler.class),
+        assertTrue(
+                Reconciler.class.isAssignableFrom(ProducerPolicyReconciler.class),
                 "ProducerPolicyReconciler must implement Reconciler (which includes updateErrorStatus)");
     }
 
     @Test
     void consumerReconcilerImplementsReconciler() {
-        assertTrue(Reconciler.class.isAssignableFrom(ConsumerPolicyReconciler.class),
+        assertTrue(
+                Reconciler.class.isAssignableFrom(ConsumerPolicyReconciler.class),
                 "ConsumerPolicyReconciler must implement Reconciler (which includes updateErrorStatus)");
     }
 
@@ -30,15 +32,16 @@ class ErrorStatusHandlerTest {
     void producerUpdateErrorStatusSetsReadyFalse() {
         var reconciler = new ProducerPolicyReconciler();
         var resource = new CloudEventSigningProducerPolicy();
-        resource.setMetadata(new ObjectMetaBuilder()
-                .withName("test-policy")
-                .withNamespace("test-ns")
-                .build());
+        resource.setMetadata(
+                new ObjectMetaBuilder().withName("test-policy").withNamespace("test-ns").build());
         resource.setStatus(new CloudEventSigningProducerPolicyStatus());
 
-        // Call updateErrorStatus directly — it should set conditions without needing context.getClient()
+        // Call updateErrorStatus directly — it should set conditions without needing
+        // context.getClient()
         // We pass null context since the event emission is wrapped in try-catch
-        var result = reconciler.updateErrorStatus(resource, null, new RuntimeException("API server timeout"));
+        var result =
+                reconciler.updateErrorStatus(
+                        resource, null, new RuntimeException("API server timeout"));
 
         assertNotNull(result);
         var status = resource.getStatus();
@@ -56,13 +59,13 @@ class ErrorStatusHandlerTest {
     void consumerUpdateErrorStatusSetsReadyFalse() {
         var reconciler = new ConsumerPolicyReconciler();
         var resource = new CloudEventSigningConsumerPolicy();
-        resource.setMetadata(new ObjectMetaBuilder()
-                .withName("test-policy")
-                .withNamespace("test-ns")
-                .build());
+        resource.setMetadata(
+                new ObjectMetaBuilder().withName("test-policy").withNamespace("test-ns").build());
         resource.setStatus(new CloudEventSigningConsumerPolicyStatus());
 
-        var result = reconciler.updateErrorStatus(resource, null, new RuntimeException("Connection refused"));
+        var result =
+                reconciler.updateErrorStatus(
+                        resource, null, new RuntimeException("Connection refused"));
 
         assertNotNull(result);
         var status = resource.getStatus();
@@ -80,10 +83,8 @@ class ErrorStatusHandlerTest {
     void producerUpdateErrorStatusInitializesNullStatus() {
         var reconciler = new ProducerPolicyReconciler();
         var resource = new CloudEventSigningProducerPolicy();
-        resource.setMetadata(new ObjectMetaBuilder()
-                .withName("test-policy")
-                .withNamespace("test-ns")
-                .build());
+        resource.setMetadata(
+                new ObjectMetaBuilder().withName("test-policy").withNamespace("test-ns").build());
         // Status is null initially
 
         reconciler.updateErrorStatus(resource, null, new RuntimeException("error"));
@@ -96,10 +97,8 @@ class ErrorStatusHandlerTest {
     void consumerUpdateErrorStatusInitializesNullStatus() {
         var reconciler = new ConsumerPolicyReconciler();
         var resource = new CloudEventSigningConsumerPolicy();
-        resource.setMetadata(new ObjectMetaBuilder()
-                .withName("test-policy")
-                .withNamespace("test-ns")
-                .build());
+        resource.setMetadata(
+                new ObjectMetaBuilder().withName("test-policy").withNamespace("test-ns").build());
 
         reconciler.updateErrorStatus(resource, null, new RuntimeException("error"));
 

@@ -19,7 +19,13 @@ CHART_PATH   := ce-signing-operator/target/helm/kubernetes/ce-signing-operator
 
 PROM_OP_VERSION ?= v0.82.2
 
-.PHONY: dev registry build cluster connect prometheus-crds install upgrade apply rebuild logs clean status
+.PHONY: setup dev registry build cluster connect prometheus-crds install upgrade apply rebuild logs clean status
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+
+setup:
+	git config core.hooksPath .githooks
+	@echo "Git hooks configured (path: .githooks)"
 
 # ── Full flow ────────────────────────────────────────────────────────────────
 

@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.proxy.registry;
 
-import com.platform.cesigning.proxy.crypto.EventVerifier;
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.platform.cesigning.proxy.crypto.EventVerifier;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -18,8 +15,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class RegistryKeyCacheTest {
 
@@ -136,15 +135,17 @@ class RegistryKeyCacheTest {
         // Reader threads: concurrently call getEntry() while replaceAll() runs
         List<Future<List<Optional<PublicKeyEntry>>>> futures = new ArrayList<>();
         for (int i = 0; i < readerCount; i++) {
-            futures.add(executor.submit(() -> {
-                ready.countDown();
-                start.await();
-                List<Optional<PublicKeyEntry>> results = new ArrayList<>();
-                for (int j = 0; j < iterations; j++) {
-                    results.add(cache.getEntry(keyId));
-                }
-                return results;
-            }));
+            futures.add(
+                    executor.submit(
+                            () -> {
+                                ready.countDown();
+                                start.await();
+                                List<Optional<PublicKeyEntry>> results = new ArrayList<>();
+                                for (int j = 0; j < iterations; j++) {
+                                    results.add(cache.getEntry(keyId));
+                                }
+                                return results;
+                            }));
         }
 
         // Writer thread: repeatedly call replaceAll() with the same entry
@@ -158,14 +159,21 @@ class RegistryKeyCacheTest {
         executor.shutdown();
         for (Future<List<Optional<PublicKeyEntry>>> future : futures) {
             for (Optional<PublicKeyEntry> result : future.get()) {
-                assertTrue(result.isPresent(),
+                assertTrue(
+                        result.isPresent(),
                         "getEntry() must never see empty cache during replaceAll() when key was present");
             }
         }
     }
 
     private PublicKeyEntry makeEntry(String namespace, String keyId, String status) {
-        return new PublicKeyEntry(namespace, keyId, publicKey, "ed25519",
-                OffsetDateTime.now(), OffsetDateTime.now().plusDays(90), status);
+        return new PublicKeyEntry(
+                namespace,
+                keyId,
+                publicKey,
+                "ed25519",
+                OffsetDateTime.now(),
+                OffsetDateTime.now().plusDays(90),
+                status);
     }
 }

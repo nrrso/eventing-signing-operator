@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.proxy.crypto;
 
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Base64;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 class EventSignerTest {
 

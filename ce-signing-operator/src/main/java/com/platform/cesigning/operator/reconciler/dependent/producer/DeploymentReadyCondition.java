@@ -12,16 +12,19 @@ public class DeploymentReadyCondition
         implements Condition<Deployment, CloudEventSigningProducerPolicy> {
 
     @Override
-    public boolean isMet(DependentResource<Deployment, CloudEventSigningProducerPolicy> dependentResource,
-                         CloudEventSigningProducerPolicy primary,
-                         Context<CloudEventSigningProducerPolicy> context) {
-        return dependentResource.getSecondaryResource(primary, context)
-                .map(deployment -> {
-                    DeploymentStatus status = deployment.getStatus();
-                    return status != null
-                            && status.getAvailableReplicas() != null
-                            && status.getAvailableReplicas() >= 1;
-                })
+    public boolean isMet(
+            DependentResource<Deployment, CloudEventSigningProducerPolicy> dependentResource,
+            CloudEventSigningProducerPolicy primary,
+            Context<CloudEventSigningProducerPolicy> context) {
+        return dependentResource
+                .getSecondaryResource(primary, context)
+                .map(
+                        deployment -> {
+                            DeploymentStatus status = deployment.getStatus();
+                            return status != null
+                                    && status.getAvailableReplicas() != null
+                                    && status.getAvailableReplicas() >= 1;
+                        })
                 .orElse(false);
     }
 }

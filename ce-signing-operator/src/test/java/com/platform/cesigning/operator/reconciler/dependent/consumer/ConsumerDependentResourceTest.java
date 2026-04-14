@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler.dependent.consumer;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicySpec;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicyStatus;
@@ -10,19 +13,16 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentStatus;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.DependentResource;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ConsumerDependentResourceTest {
 
     private CloudEventSigningConsumerPolicy primary;
+
     @SuppressWarnings("unchecked")
     private Context<CloudEventSigningConsumerPolicy> context = mock(Context.class);
 
@@ -51,15 +51,27 @@ class ConsumerDependentResourceTest {
         assertEquals("bu-bob", deployment.getMetadata().getNamespace());
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        assertEquals("verify", envVars.stream()
-                .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("bu-alice,bu-carol", envVars.stream()
-                .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("true", envVars.stream()
-                .filter(e -> "CE_SIGNING_REJECT_UNSIGNED".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
+        assertEquals(
+                "verify",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "bu-alice,bu-carol",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "true",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_REJECT_UNSIGNED".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
     }
 
     @Test
@@ -74,44 +86,68 @@ class ConsumerDependentResourceTest {
 
     @Test
     void deploymentDesiredInjectsUserEnvVars() {
-        primary.getSpec().getProxy().setEnv(Map.of(
-                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317",
-                "CE_SIGNING_LOG_LEVEL", "DEBUG"));
+        primary.getSpec()
+                .getProxy()
+                .setEnv(
+                        Map.of(
+                                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317",
+                                "CE_SIGNING_LOG_LEVEL", "DEBUG"));
 
         var resource = new VerifyingDeploymentDependentResource();
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        assertEquals("http://otel-collector:4317", envVars.stream()
-                .filter(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("DEBUG", envVars.stream()
-                .filter(e -> "CE_SIGNING_LOG_LEVEL".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
+        assertEquals(
+                "http://otel-collector:4317",
+                envVars.stream()
+                        .filter(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "DEBUG",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_LOG_LEVEL".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
     }
 
     @Test
     void deploymentDesiredFiltersReservedEnvKeys() {
-        primary.getSpec().getProxy().setEnv(Map.of(
-                "CE_SIGNING_MODE", "sign",
-                "CE_SIGNING_TRUSTED_NAMESPACES", "evil-ns",
-                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317"));
+        primary.getSpec()
+                .getProxy()
+                .setEnv(
+                        Map.of(
+                                "CE_SIGNING_MODE", "sign",
+                                "CE_SIGNING_TRUSTED_NAMESPACES", "evil-ns",
+                                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317"));
 
         var resource = new VerifyingDeploymentDependentResource();
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
         // Reserved keys keep operator-managed values
-        assertEquals("verify", envVars.stream()
-                .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("bu-alice,bu-carol", envVars.stream()
-                .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
+        assertEquals(
+                "verify",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "bu-alice,bu-carol",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
         // Non-reserved key is passed through
-        assertTrue(envVars.stream().anyMatch(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName())));
+        assertTrue(
+                envVars.stream().anyMatch(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName())));
         // Reserved keys should not appear twice
-        assertEquals(1, envVars.stream().filter(e -> "CE_SIGNING_MODE".equals(e.getName())).count());
+        assertEquals(
+                1, envVars.stream().filter(e -> "CE_SIGNING_MODE".equals(e.getName())).count());
     }
 
     @Test
@@ -135,7 +171,8 @@ class ConsumerDependentResourceTest {
         status.setAvailableReplicas(1);
         deployment.setStatus(status);
 
-        when(depResource.getSecondaryResource(primary, context)).thenReturn(Optional.of(deployment));
+        when(depResource.getSecondaryResource(primary, context))
+                .thenReturn(Optional.of(deployment));
         assertTrue(condition.isMet(depResource, primary, context));
     }
 
@@ -156,10 +193,14 @@ class ConsumerDependentResourceTest {
 
         var container = deployment.getSpec().getTemplate().getSpec().getContainers().get(0);
         assertNotNull(container.getResources(), "resources should be set");
-        assertNotNull(container.getResources().getRequests().get("cpu"), "cpu request should be set");
-        assertNotNull(container.getResources().getRequests().get("memory"), "memory request should be set");
+        assertNotNull(
+                container.getResources().getRequests().get("cpu"), "cpu request should be set");
+        assertNotNull(
+                container.getResources().getRequests().get("memory"),
+                "memory request should be set");
         assertNotNull(container.getResources().getLimits().get("cpu"), "cpu limit should be set");
-        assertNotNull(container.getResources().getLimits().get("memory"), "memory limit should be set");
+        assertNotNull(
+                container.getResources().getLimits().get("memory"), "memory limit should be set");
     }
 
     @Test
@@ -167,7 +208,8 @@ class ConsumerDependentResourceTest {
         var resource = new VerifyingServiceDependentResource();
         var service = resource.desired(primary, context);
 
-        assertFalse(service.getSpec().getSelector().containsKey("app.kubernetes.io/managed-by"),
+        assertFalse(
+                service.getSpec().getSelector().containsKey("app.kubernetes.io/managed-by"),
                 "Service selector must not include managed-by label");
         assertTrue(service.getSpec().getSelector().containsKey("app.kubernetes.io/name"));
         assertTrue(service.getSpec().getSelector().containsKey("app.kubernetes.io/component"));

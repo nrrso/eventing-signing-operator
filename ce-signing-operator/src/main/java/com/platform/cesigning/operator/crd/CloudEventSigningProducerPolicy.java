@@ -17,6 +17,6 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Singular("cloudeventsigningproducerpolicy")
 @ShortNames("cespp")
 public class CloudEventSigningProducerPolicy
-        extends CustomResource<CloudEventSigningProducerPolicySpec, CloudEventSigningProducerPolicyStatus>
-        implements Namespaced {
-}
+        extends CustomResource<
+                CloudEventSigningProducerPolicySpec, CloudEventSigningProducerPolicyStatus>
+        implements Namespaced {}

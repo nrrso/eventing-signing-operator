@@ -2,16 +2,15 @@
 package com.platform.cesigning.proxy.registry;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import org.jboss.logging.Logger;
-
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jboss.logging.Logger;
 
 /**
- * In-memory cache of public keys from the cluster-scoped PublicKeyRegistry.
- * Populated by Fabric8 informer/Watch on PublicKeyRegistry singleton.
+ * In-memory cache of public keys from the cluster-scoped PublicKeyRegistry. Populated by Fabric8
+ * informer/Watch on PublicKeyRegistry singleton.
  */
 @ApplicationScoped
 public class RegistryKeyCache {
@@ -29,32 +28,24 @@ public class RegistryKeyCache {
         return synced.get();
     }
 
-    /**
-     * Replace all entries in the cache. Called by the informer on initial LIST and on updates.
-     */
+    /** Replace all entries in the cache. Called by the informer on initial LIST and on updates. */
     public void replaceAll(java.util.Map<String, PublicKeyEntry> entries) {
         cache = new ConcurrentHashMap<>(entries);
         synced.set(true);
         LOG.infof("Registry cache updated: %d entries", entries.size());
     }
 
-    /**
-     * Update a single entry. Called on incremental Watch events.
-     */
+    /** Update a single entry. Called on incremental Watch events. */
     public void put(String keyId, PublicKeyEntry entry) {
         cache.put(keyId, entry);
     }
 
-    /**
-     * Remove an entry.
-     */
+    /** Remove an entry. */
     public void remove(String keyId) {
         cache.remove(keyId);
     }
 
-    /**
-     * Mark as synced after initial LIST completes.
-     */
+    /** Mark as synced after initial LIST completes. */
     public void markSynced() {
         synced.set(true);
     }

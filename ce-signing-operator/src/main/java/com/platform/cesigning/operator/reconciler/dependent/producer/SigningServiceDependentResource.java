@@ -7,7 +7,6 @@ import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
-
 import java.util.Map;
 
 @KubernetesDependent
@@ -23,28 +22,33 @@ public class SigningServiceDependentResource
     }
 
     @Override
-    protected Service desired(CloudEventSigningProducerPolicy primary,
-                              Context<CloudEventSigningProducerPolicy> context) {
+    protected Service desired(
+            CloudEventSigningProducerPolicy primary,
+            Context<CloudEventSigningProducerPolicy> context) {
         String namespace = primary.getMetadata().getNamespace();
-        Map<String, String> labels = Map.of(
-                APP_LABEL, "ce-signing-proxy",
-                COMPONENT_LABEL, "signer",
-                MANAGED_BY, "ce-signing-operator"
-        );
-        Map<String, String> selector = Map.of(
-                APP_LABEL, "ce-signing-proxy",
-                COMPONENT_LABEL, "signer"
-        );
+        Map<String, String> labels =
+                Map.of(
+                        APP_LABEL, "ce-signing-proxy",
+                        COMPONENT_LABEL, "signer",
+                        MANAGED_BY, "ce-signing-operator");
+        Map<String, String> selector =
+                Map.of(
+                        APP_LABEL, "ce-signing-proxy",
+                        COMPONENT_LABEL, "signer");
 
         return new ServiceBuilder()
                 .withNewMetadata()
-                    .withName("ce-signer")
-                    .withNamespace(namespace)
-                    .withLabels(labels)
+                .withName("ce-signer")
+                .withNamespace(namespace)
+                .withLabels(labels)
                 .endMetadata()
                 .withNewSpec()
-                    .withSelector(selector)
-                    .addNewPort().withPort(80).withNewTargetPort(8090).withName("http").endPort()
+                .withSelector(selector)
+                .addNewPort()
+                .withPort(80)
+                .withNewTargetPort(8090)
+                .withName("http")
+                .endPort()
                 .endSpec()
                 .build();
     }

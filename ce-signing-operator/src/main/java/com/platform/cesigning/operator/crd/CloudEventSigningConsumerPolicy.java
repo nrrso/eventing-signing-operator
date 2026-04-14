@@ -17,6 +17,6 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Singular("cloudeventsigningconsumerpolicy")
 @ShortNames("cescp")
 public class CloudEventSigningConsumerPolicy
-        extends CustomResource<CloudEventSigningConsumerPolicySpec, CloudEventSigningConsumerPolicyStatus>
-        implements Namespaced {
-}
+        extends CustomResource<
+                CloudEventSigningConsumerPolicySpec, CloudEventSigningConsumerPolicyStatus>
+        implements Namespaced {}

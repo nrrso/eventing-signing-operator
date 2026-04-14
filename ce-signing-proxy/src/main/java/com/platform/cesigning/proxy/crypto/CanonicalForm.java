@@ -2,33 +2,32 @@
 package com.platform.cesigning.proxy.crypto;
 
 import io.cloudevents.CloudEvent;
-import org.erdtman.jcs.JsonCanonicalizer;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
+import org.erdtman.jcs.JsonCanonicalizer;
 
 /**
- * Builds a deterministic byte representation of a CloudEvent for signing/verification.
- * Operates on the parsed CloudEvent SDK object, never on raw wire bytes.
+ * Builds a deterministic byte representation of a CloudEvent for signing/verification. Operates on
+ * the parsed CloudEvent SDK object, never on raw wire bytes.
  */
 public final class CanonicalForm {
 
-    private CanonicalForm() {
-    }
+    private CanonicalForm() {}
 
     /**
      * Build canonical bytes from a CloudEvent and a list of attribute names to include.
      *
      * <p>Algorithm:
+     *
      * <ol>
-     *   <li>Filter: keep only attributes present on the event</li>
-     *   <li>Sort remaining names lexicographically (UTF-8 byte order)</li>
-     *   <li>For each attribute: append name=value\n using CloudEvents string representation</li>
-     *   <li>Append data= followed by canonicalized data bytes</li>
+     *   <li>Filter: keep only attributes present on the event
+     *   <li>Sort remaining names lexicographically (UTF-8 byte order)
+     *   <li>For each attribute: append name=value\n using CloudEvents string representation
+     *   <li>Append data= followed by canonicalized data bytes
      * </ol>
      */
     public static byte[] build(CloudEvent event, List<String> canonicalAttributes) {
@@ -80,7 +79,8 @@ public final class CanonicalForm {
     }
 
     /**
-     * Returns the sorted, comma-separated list of canonical attributes actually present on the event.
+     * Returns the sorted, comma-separated list of canonical attributes actually present on the
+     * event.
      */
     public static String presentAttributes(CloudEvent event, List<String> canonicalAttributes) {
         TreeSet<String> sorted = new TreeSet<>();

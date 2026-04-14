@@ -12,9 +12,11 @@ public class HpaEnabledCondition
         implements Condition<HorizontalPodAutoscaler, CloudEventSigningProducerPolicy> {
 
     @Override
-    public boolean isMet(DependentResource<HorizontalPodAutoscaler, CloudEventSigningProducerPolicy> dependentResource,
-                         CloudEventSigningProducerPolicy primary,
-                         Context<CloudEventSigningProducerPolicy> context) {
+    public boolean isMet(
+            DependentResource<HorizontalPodAutoscaler, CloudEventSigningProducerPolicy>
+                    dependentResource,
+            CloudEventSigningProducerPolicy primary,
+            Context<CloudEventSigningProducerPolicy> context) {
         ProxyConfig.HpaConfig hpa = primary.getSpec().getProxy().getHpa();
         return hpa != null && hpa.isEnabled();
     }

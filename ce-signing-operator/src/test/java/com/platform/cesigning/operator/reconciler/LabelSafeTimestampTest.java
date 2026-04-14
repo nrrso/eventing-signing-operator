@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class LabelSafeTimestampTest {
 
@@ -40,7 +39,8 @@ class LabelSafeTimestampTest {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String encoded = LabelSafeTimestamp.encode(now);
         // K8s label regex: (([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?
-        assertTrue(encoded.matches("[A-Za-z0-9][-A-Za-z0-9_.]*[A-Za-z0-9]|[A-Za-z0-9]"),
+        assertTrue(
+                encoded.matches("[A-Za-z0-9][-A-Za-z0-9_.]*[A-Za-z0-9]|[A-Za-z0-9]"),
                 "Encoded value must be valid K8s label: " + encoded);
     }
 }

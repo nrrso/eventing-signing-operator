@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.proxy.crypto;
 
-import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator;
-import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters;
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator;
+import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 class EventVerifierTest {
 
@@ -48,7 +47,8 @@ class EventVerifierTest {
         Ed25519KeyPairGenerator keyGen = new Ed25519KeyPairGenerator();
         keyGen.init(new Ed25519KeyGenerationParameters(new SecureRandom()));
         var wrongKeyPair = keyGen.generateKeyPair();
-        Ed25519PublicKeyParameters wrongPublicKey = (Ed25519PublicKeyParameters) wrongKeyPair.getPublic();
+        Ed25519PublicKeyParameters wrongPublicKey =
+                (Ed25519PublicKeyParameters) wrongKeyPair.getPublic();
 
         assertFalse(EventVerifier.verify(data, signature, wrongPublicKey));
     }
@@ -75,7 +75,8 @@ class EventVerifierTest {
 
     @Test
     void parsePublicKeyPemString() throws IOException {
-        String pem = """
+        String pem =
+                """
                 -----BEGIN PUBLIC KEY-----
                 MCowBQYDK2VwAyEAr60YG9I+F/p7ABER5TmSnaBQ6M/rf4vGi4YGrYEq2ds=
                 -----END PUBLIC KEY-----

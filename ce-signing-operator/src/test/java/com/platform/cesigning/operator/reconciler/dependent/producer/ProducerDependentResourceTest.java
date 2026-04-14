@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler.dependent.producer;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicySpec;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicyStatus;
@@ -15,19 +18,16 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.DependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.Creator;
 import io.javaoperatorsdk.operator.processing.dependent.Updater;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class ProducerDependentResourceTest {
 
     private CloudEventSigningProducerPolicy primary;
+
     @SuppressWarnings("unchecked")
     private Context<CloudEventSigningProducerPolicy> context = mock(Context.class);
 
@@ -54,30 +54,38 @@ class ProducerDependentResourceTest {
 
         assertEquals("ce-signing-key", secret.getMetadata().getName());
         assertEquals("bu-alice", secret.getMetadata().getNamespace());
-        assertEquals("bu-alice-v1", secret.getMetadata().getLabels().get(SecretDependentResource.KEY_ID_LABEL));
-        String createdAt = secret.getMetadata().getLabels().get(SecretDependentResource.CREATED_AT_LABEL);
+        assertEquals(
+                "bu-alice-v1",
+                secret.getMetadata().getLabels().get(SecretDependentResource.KEY_ID_LABEL));
+        String createdAt =
+                secret.getMetadata().getLabels().get(SecretDependentResource.CREATED_AT_LABEL);
         assertNotNull(createdAt);
-        assertTrue(createdAt.matches("\\d+"), "created-at label must be epoch seconds (digits only), got: " + createdAt);
+        assertTrue(
+                createdAt.matches("\\d+"),
+                "created-at label must be epoch seconds (digits only), got: " + createdAt);
         assertNotNull(secret.getData().get("private.pem"));
         assertNotNull(secret.getData().get("public.pem"));
     }
 
     @Test
     void secretImplementsCreatorOnly() {
-        assertTrue(Creator.class.isAssignableFrom(SecretDependentResource.class),
+        assertTrue(
+                Creator.class.isAssignableFrom(SecretDependentResource.class),
                 "SecretDependentResource must implement Creator");
-        assertFalse(Updater.class.isAssignableFrom(SecretDependentResource.class),
+        assertFalse(
+                Updater.class.isAssignableFrom(SecretDependentResource.class),
                 "SecretDependentResource must NOT implement Updater — Secret is create-only");
     }
 
     @Test
     void deploymentDesiredReadsKeyIdFromSecret() {
-        Secret secret = new SecretBuilder()
-                .withNewMetadata()
-                    .withName("ce-signing-key")
-                    .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v3")
-                .endMetadata()
-                .build();
+        Secret secret =
+                new SecretBuilder()
+                        .withNewMetadata()
+                        .withName("ce-signing-key")
+                        .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v3")
+                        .endMetadata()
+                        .build();
         when(context.getSecondaryResource(Secret.class)).thenReturn(Optional.of(secret));
 
         var resource = new SigningDeploymentDependentResource();
@@ -85,9 +93,12 @@ class ProducerDependentResourceTest {
 
         assertEquals("ce-signer", deployment.getMetadata().getName());
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        String keyIdEnv = envVars.stream()
-                .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
-                .findFirst().orElseThrow().getValue();
+        String keyIdEnv =
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue();
         assertEquals("bu-alice-v3", keyIdEnv);
     }
 
@@ -99,9 +110,12 @@ class ProducerDependentResourceTest {
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        String keyIdEnv = envVars.stream()
-                .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
-                .findFirst().orElseThrow().getValue();
+        String keyIdEnv =
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue();
         assertEquals("bu-alice-v1", keyIdEnv);
     }
 
@@ -150,68 +164,96 @@ class ProducerDependentResourceTest {
         status.setAvailableReplicas(2);
         deployment.setStatus(status);
 
-        when(depResource.getSecondaryResource(primary, context)).thenReturn(Optional.of(deployment));
+        when(depResource.getSecondaryResource(primary, context))
+                .thenReturn(Optional.of(deployment));
 
         assertTrue(condition.isMet(depResource, primary, context));
     }
 
     @Test
     void deploymentDesiredInjectsUserEnvVars() {
-        Secret secret = new SecretBuilder()
-                .withNewMetadata()
-                    .withName("ce-signing-key")
-                    .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
-                .endMetadata()
-                .build();
+        Secret secret =
+                new SecretBuilder()
+                        .withNewMetadata()
+                        .withName("ce-signing-key")
+                        .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
+                        .endMetadata()
+                        .build();
         when(context.getSecondaryResource(Secret.class)).thenReturn(Optional.of(secret));
 
-        primary.getSpec().getProxy().setEnv(Map.of(
-                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317",
-                "CE_SIGNING_LOG_LEVEL", "DEBUG"));
+        primary.getSpec()
+                .getProxy()
+                .setEnv(
+                        Map.of(
+                                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317",
+                                "CE_SIGNING_LOG_LEVEL", "DEBUG"));
 
         var resource = new SigningDeploymentDependentResource();
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        assertEquals("http://otel-collector:4317", envVars.stream()
-                .filter(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("DEBUG", envVars.stream()
-                .filter(e -> "CE_SIGNING_LOG_LEVEL".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
+        assertEquals(
+                "http://otel-collector:4317",
+                envVars.stream()
+                        .filter(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "DEBUG",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_LOG_LEVEL".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
     }
 
     @Test
     void deploymentDesiredFiltersReservedEnvKeys() {
-        Secret secret = new SecretBuilder()
-                .withNewMetadata()
-                    .withName("ce-signing-key")
-                    .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
-                .endMetadata()
-                .build();
+        Secret secret =
+                new SecretBuilder()
+                        .withNewMetadata()
+                        .withName("ce-signing-key")
+                        .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
+                        .endMetadata()
+                        .build();
         when(context.getSecondaryResource(Secret.class)).thenReturn(Optional.of(secret));
 
-        primary.getSpec().getProxy().setEnv(Map.of(
-                "CE_SIGNING_MODE", "verify",
-                "CE_SIGNING_KEY_ID", "evil-key",
-                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317"));
+        primary.getSpec()
+                .getProxy()
+                .setEnv(
+                        Map.of(
+                                "CE_SIGNING_MODE", "verify",
+                                "CE_SIGNING_KEY_ID", "evil-key",
+                                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317"));
 
         var resource = new SigningDeploymentDependentResource();
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
         // Reserved keys keep operator-managed values
-        assertEquals("sign", envVars.stream()
-                .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
-        assertEquals("bu-alice-v1", envVars.stream()
-                .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
-                .findFirst().orElseThrow().getValue());
+        assertEquals(
+                "sign",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_MODE".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
+        assertEquals(
+                "bu-alice-v1",
+                envVars.stream()
+                        .filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getValue());
         // Non-reserved key is passed through
-        assertTrue(envVars.stream().anyMatch(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName())));
+        assertTrue(
+                envVars.stream().anyMatch(e -> "OTEL_EXPORTER_OTLP_ENDPOINT".equals(e.getName())));
         // Reserved keys should not appear twice
-        assertEquals(1, envVars.stream().filter(e -> "CE_SIGNING_MODE".equals(e.getName())).count());
-        assertEquals(1, envVars.stream().filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName())).count());
+        assertEquals(
+                1, envVars.stream().filter(e -> "CE_SIGNING_MODE".equals(e.getName())).count());
+        assertEquals(
+                1, envVars.stream().filter(e -> "CE_SIGNING_KEY_ID".equals(e.getName())).count());
     }
 
     @Test
@@ -235,10 +277,14 @@ class ProducerDependentResourceTest {
 
         var container = deployment.getSpec().getTemplate().getSpec().getContainers().get(0);
         assertNotNull(container.getResources(), "resources should be set");
-        assertNotNull(container.getResources().getRequests().get("cpu"), "cpu request should be set");
-        assertNotNull(container.getResources().getRequests().get("memory"), "memory request should be set");
+        assertNotNull(
+                container.getResources().getRequests().get("cpu"), "cpu request should be set");
+        assertNotNull(
+                container.getResources().getRequests().get("memory"),
+                "memory request should be set");
         assertNotNull(container.getResources().getLimits().get("cpu"), "cpu limit should be set");
-        assertNotNull(container.getResources().getLimits().get("memory"), "memory limit should be set");
+        assertNotNull(
+                container.getResources().getLimits().get("memory"), "memory limit should be set");
     }
 
     @Test
@@ -246,7 +292,8 @@ class ProducerDependentResourceTest {
         var resource = new SigningServiceDependentResource();
         var service = resource.desired(primary, context);
 
-        assertFalse(service.getSpec().getSelector().containsKey("app.kubernetes.io/managed-by"),
+        assertFalse(
+                service.getSpec().getSelector().containsKey("app.kubernetes.io/managed-by"),
                 "Service selector must not include managed-by label");
         assertTrue(service.getSpec().getSelector().containsKey("app.kubernetes.io/name"));
         assertTrue(service.getSpec().getSelector().containsKey("app.kubernetes.io/component"));
@@ -261,7 +308,8 @@ class ProducerDependentResourceTest {
         var deployment = new Deployment();
         deployment.setStatus(new DeploymentStatus());
 
-        when(depResource.getSecondaryResource(primary, context)).thenReturn(Optional.of(deployment));
+        when(depResource.getSecondaryResource(primary, context))
+                .thenReturn(Optional.of(deployment));
 
         assertFalse(condition.isMet(depResource, primary, context));
     }

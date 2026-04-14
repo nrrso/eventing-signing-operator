@@ -24,30 +24,33 @@ import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.api.reconciler.Workflow;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.Dependent;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.jboss.logging.Logger;
 
-@Workflow(dependents = {
-        @Dependent(name = "serviceaccount", type = VerifierServiceAccountDependentResource.class),
-        @Dependent(name = "deployment", type = VerifyingDeploymentDependentResource.class,
-                readyPostcondition = VerifierDeploymentReadyCondition.class,
-                dependsOn = "serviceaccount"),
-        @Dependent(name = "service", type = VerifyingServiceDependentResource.class)
-})
+@Workflow(
+        dependents = {
+            @Dependent(
+                    name = "serviceaccount",
+                    type = VerifierServiceAccountDependentResource.class),
+            @Dependent(
+                    name = "deployment",
+                    type = VerifyingDeploymentDependentResource.class,
+                    readyPostcondition = VerifierDeploymentReadyCondition.class,
+                    dependsOn = "serviceaccount"),
+            @Dependent(name = "service", type = VerifyingServiceDependentResource.class)
+        })
 @ControllerConfiguration
 public class ConsumerPolicyReconciler
         implements Reconciler<CloudEventSigningConsumerPolicy>,
-                   Cleaner<CloudEventSigningConsumerPolicy> {
+                Cleaner<CloudEventSigningConsumerPolicy> {
 
     private static final Logger LOG = Logger.getLogger(ConsumerPolicyReconciler.class);
 
-    @Inject
-    KubernetesClient client;
+    @Inject KubernetesClient client;
 
     @Override
     public UpdateControl<CloudEventSigningConsumerPolicy> reconcile(
@@ -74,7 +77,8 @@ public class ConsumerPolicyReconciler
         OwnerReference ownerRef = buildOwnerReference(resource);
         List<String> expectedSequenceNames = new ArrayList<>();
         List<String> expectedTriggerNames = new ArrayList<>();
-        List<CloudEventSigningConsumerPolicyStatus.ConsumerTriggerStatus> consumerStatuses = new ArrayList<>();
+        List<CloudEventSigningConsumerPolicyStatus.ConsumerTriggerStatus> consumerStatuses =
+                new ArrayList<>();
 
         for (ConsumerTriggerEntry consumer : resource.getSpec().getConsumers()) {
             String seqName = consumer.getName() + "-verify-seq";
@@ -83,17 +87,27 @@ public class ConsumerPolicyReconciler
             expectedTriggerNames.add(triggerName);
 
             // Create verifying Sequence
-            GenericKubernetesResource sequence = KnativeResourceHelper.buildVerifyingSequence(
-                    consumer.getName(), namespace, "ce-verifier", consumer.getSubscriber(), ownerRef);
+            GenericKubernetesResource sequence =
+                    KnativeResourceHelper.buildVerifyingSequence(
+                            consumer.getName(),
+                            namespace,
+                            "ce-verifier",
+                            consumer.getSubscriber(),
+                            ownerRef);
             client.genericKubernetesResources(KnativeResourceHelper.SEQUENCE_RDC)
                     .inNamespace(namespace)
                     .resource(sequence)
                     .serverSideApply();
 
             // Create Trigger on broker -> Sequence
-            GenericKubernetesResource trigger = KnativeResourceHelper.buildConsumerTrigger(
-                    consumer.getName(), namespace, consumer.getBroker(),
-                    consumer.getFilter(), seqName, ownerRef);
+            GenericKubernetesResource trigger =
+                    KnativeResourceHelper.buildConsumerTrigger(
+                            consumer.getName(),
+                            namespace,
+                            consumer.getBroker(),
+                            consumer.getFilter(),
+                            seqName,
+                            ownerRef);
             client.genericKubernetesResources(KnativeResourceHelper.TRIGGER_RDC)
                     .inNamespace(namespace)
                     .resource(trigger)
@@ -109,21 +123,32 @@ public class ConsumerPolicyReconciler
         cleanupOrphanedTriggers(namespace, expectedTriggerNames);
         status.setConsumers(consumerStatuses);
 
-        boolean allReady = context.managedWorkflowAndDependentResourceContext()
-                .getWorkflowReconcileResult()
-                .map(r -> r.allDependentResourcesReady())
-                .orElse(false);
+        boolean allReady =
+                context.managedWorkflowAndDependentResourceContext()
+                        .getWorkflowReconcileResult()
+                        .map(r -> r.allDependentResourcesReady())
+                        .orElse(false);
 
         if (allReady) {
-            statusChanged |= status.setCondition("VerifyingProxyReady", "True", "Available",
-                    "Verifying proxy deployment has available replicas");
-            statusChanged |= status.setCondition("Ready", "True", "Reconciled",
-                    "All resources created successfully");
+            statusChanged |=
+                    status.setCondition(
+                            "VerifyingProxyReady",
+                            "True",
+                            "Available",
+                            "Verifying proxy deployment has available replicas");
+            statusChanged |=
+                    status.setCondition(
+                            "Ready", "True", "Reconciled", "All resources created successfully");
         } else {
-            statusChanged |= status.setCondition("VerifyingProxyReady", "False", "DeploymentNotReady",
-                    "Verifying proxy deployment not yet available");
-            statusChanged |= status.setCondition("Ready", "False", "NotReady",
-                    "Not all dependent resources are ready");
+            statusChanged |=
+                    status.setCondition(
+                            "VerifyingProxyReady",
+                            "False",
+                            "DeploymentNotReady",
+                            "Verifying proxy deployment not yet available");
+            statusChanged |=
+                    status.setCondition(
+                            "Ready", "False", "NotReady", "Not all dependent resources are ready");
         }
 
         Long generation = resource.getMetadata().getGeneration();
@@ -140,8 +165,9 @@ public class ConsumerPolicyReconciler
     }
 
     @Override
-    public DeleteControl cleanup(CloudEventSigningConsumerPolicy resource,
-                                 Context<CloudEventSigningConsumerPolicy> context) {
+    public DeleteControl cleanup(
+            CloudEventSigningConsumerPolicy resource,
+            Context<CloudEventSigningConsumerPolicy> context) {
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
         LOG.infof("Cleaning up ConsumerPolicy %s/%s", namespace, name);
@@ -160,14 +186,20 @@ public class ConsumerPolicyReconciler
         deleteOwnedTriggers(namespace, ownedTriggerNames);
 
         // Only delete shared CRB if no other ConsumerPolicy exists in this namespace
-        boolean otherPoliciesExist = client.resources(CloudEventSigningConsumerPolicy.class)
-                .inNamespace(namespace)
-                .list().getItems().stream()
-                .anyMatch(p -> !name.equals(p.getMetadata().getName()));
+        boolean otherPoliciesExist =
+                client
+                        .resources(CloudEventSigningConsumerPolicy.class)
+                        .inNamespace(namespace)
+                        .list()
+                        .getItems()
+                        .stream()
+                        .anyMatch(p -> !name.equals(p.getMetadata().getName()));
         if (!otherPoliciesExist) {
             deleteVerifierClusterRoleBinding(namespace);
         } else {
-            LOG.infof("Skipping CRB deletion — other ConsumerPolicies exist in namespace %s", namespace);
+            LOG.infof(
+                    "Skipping CRB deletion — other ConsumerPolicies exist in namespace %s",
+                    namespace);
         }
 
         return DeleteControl.defaultDelete();
@@ -190,9 +222,10 @@ public class ConsumerPolicyReconciler
         status.setCondition("Ready", "False", "ReconcileFailed", e.getMessage());
 
         try {
-            context.getClient().resource(
-                    EventHelper.warningEvent(resource, "ReconcileFailed", e.getMessage()))
-                    .inNamespace(namespace).create();
+            context.getClient()
+                    .resource(EventHelper.warningEvent(resource, "ReconcileFailed", e.getMessage()))
+                    .inNamespace(namespace)
+                    .create();
         } catch (Exception eventErr) {
             LOG.warnf(eventErr, "Failed to emit warning event for %s/%s", namespace, name);
         }
@@ -212,18 +245,24 @@ public class ConsumerPolicyReconciler
 
     private void cleanupOrphanedSequences(String namespace, List<String> expectedNames) {
         try {
-            var existing = client.genericKubernetesResources(KnativeResourceHelper.SEQUENCE_RDC)
-                    .inNamespace(namespace)
-                    .withLabel(KnativeResourceHelper.MANAGED_BY_LABEL, KnativeResourceHelper.MANAGED_BY_VALUE)
-                    .withLabel(KnativeResourceHelper.COMPONENT_LABEL, "verifier")
-                    .list().getItems();
+            var existing =
+                    client.genericKubernetesResources(KnativeResourceHelper.SEQUENCE_RDC)
+                            .inNamespace(namespace)
+                            .withLabel(
+                                    KnativeResourceHelper.MANAGED_BY_LABEL,
+                                    KnativeResourceHelper.MANAGED_BY_VALUE)
+                            .withLabel(KnativeResourceHelper.COMPONENT_LABEL, "verifier")
+                            .list()
+                            .getItems();
             for (var seq : existing) {
                 if (!expectedNames.contains(seq.getMetadata().getName())) {
                     client.genericKubernetesResources(KnativeResourceHelper.SEQUENCE_RDC)
                             .inNamespace(namespace)
                             .withName(seq.getMetadata().getName())
                             .delete();
-                    LOG.infof("Deleted orphaned Sequence %s/%s", namespace, seq.getMetadata().getName());
+                    LOG.infof(
+                            "Deleted orphaned Sequence %s/%s",
+                            namespace, seq.getMetadata().getName());
                 }
             }
         } catch (Exception e) {
@@ -233,26 +272,27 @@ public class ConsumerPolicyReconciler
 
     private void ensureVerifierClusterRoleBinding(String namespace) {
         String bindingName = "ce-signing-verifier-" + namespace;
-        ClusterRoleBinding crb = new ClusterRoleBindingBuilder()
-                .withNewMetadata()
-                    .withName(bindingName)
-                    .withLabels(Map.of(
-                            "app.kubernetes.io/name", "ce-signing-proxy",
-                            "app.kubernetes.io/component", "verifier",
-                            "app.kubernetes.io/managed-by", "ce-signing-operator"
-                    ))
-                .endMetadata()
-                .withNewRoleRef()
-                    .withApiGroup("rbac.authorization.k8s.io")
-                    .withKind("ClusterRole")
-                    .withName("ce-signing-verifier")
-                .endRoleRef()
-                .addNewSubject()
-                    .withKind("ServiceAccount")
-                    .withName(VerifierServiceAccountDependentResource.SERVICE_ACCOUNT_NAME)
-                    .withNamespace(namespace)
-                .endSubject()
-                .build();
+        ClusterRoleBinding crb =
+                new ClusterRoleBindingBuilder()
+                        .withNewMetadata()
+                        .withName(bindingName)
+                        .withLabels(
+                                Map.of(
+                                        "app.kubernetes.io/name", "ce-signing-proxy",
+                                        "app.kubernetes.io/component", "verifier",
+                                        "app.kubernetes.io/managed-by", "ce-signing-operator"))
+                        .endMetadata()
+                        .withNewRoleRef()
+                        .withApiGroup("rbac.authorization.k8s.io")
+                        .withKind("ClusterRole")
+                        .withName("ce-signing-verifier")
+                        .endRoleRef()
+                        .addNewSubject()
+                        .withKind("ServiceAccount")
+                        .withName(VerifierServiceAccountDependentResource.SERVICE_ACCOUNT_NAME)
+                        .withNamespace(namespace)
+                        .endSubject()
+                        .build();
         client.rbac().clusterRoleBindings().resource(crb).serverSideApply();
     }
 
@@ -296,18 +336,24 @@ public class ConsumerPolicyReconciler
 
     private void cleanupOrphanedTriggers(String namespace, List<String> expectedNames) {
         try {
-            var existing = client.genericKubernetesResources(KnativeResourceHelper.TRIGGER_RDC)
-                    .inNamespace(namespace)
-                    .withLabel(KnativeResourceHelper.MANAGED_BY_LABEL, KnativeResourceHelper.MANAGED_BY_VALUE)
-                    .withLabel(KnativeResourceHelper.COMPONENT_LABEL, "verifier")
-                    .list().getItems();
+            var existing =
+                    client.genericKubernetesResources(KnativeResourceHelper.TRIGGER_RDC)
+                            .inNamespace(namespace)
+                            .withLabel(
+                                    KnativeResourceHelper.MANAGED_BY_LABEL,
+                                    KnativeResourceHelper.MANAGED_BY_VALUE)
+                            .withLabel(KnativeResourceHelper.COMPONENT_LABEL, "verifier")
+                            .list()
+                            .getItems();
             for (var trigger : existing) {
                 if (!expectedNames.contains(trigger.getMetadata().getName())) {
                     client.genericKubernetesResources(KnativeResourceHelper.TRIGGER_RDC)
                             .inNamespace(namespace)
                             .withName(trigger.getMetadata().getName())
                             .delete();
-                    LOG.infof("Deleted orphaned Trigger %s/%s", namespace, trigger.getMetadata().getName());
+                    LOG.infof(
+                            "Deleted orphaned Trigger %s/%s",
+                            namespace, trigger.getMetadata().getName());
                 }
             }
         } catch (Exception e) {

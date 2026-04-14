@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.platform.cesigning.operator.crd.PublicKeyRegistry;
 import com.platform.cesigning.operator.reconciler.dependent.producer.SecretDependentResource;
 import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class KeyRotationReconcilerTest {
 
@@ -42,26 +41,28 @@ class KeyRotationReconcilerTest {
 
     @Test
     void performRotationPreservesOwnerReferences() {
-        OwnerReference ownerRef = new OwnerReferenceBuilder()
-                .withApiVersion("ce-signing.platform.io/v1alpha1")
-                .withKind("CloudEventSigningProducerPolicy")
-                .withName("test-policy")
-                .withUid("test-uid-123")
-                .withController(true)
-                .build();
+        OwnerReference ownerRef =
+                new OwnerReferenceBuilder()
+                        .withApiVersion("ce-signing.platform.io/v1alpha1")
+                        .withKind("CloudEventSigningProducerPolicy")
+                        .withName("test-policy")
+                        .withUid("test-uid-123")
+                        .withController(true)
+                        .build();
 
-        Secret existingSecret = new SecretBuilder()
-                .withNewMetadata()
-                    .withName(SecretDependentResource.SECRET_NAME)
-                    .withNamespace("bu-alice")
-                    .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
-                    .addToLabels(SecretDependentResource.CREATED_AT_LABEL, "1735689600")
-                    .withOwnerReferences(ownerRef)
-                .endMetadata()
-                .withType("Opaque")
-                .addToData("private.pem", "old-key")
-                .addToData("public.pem", "old-pub")
-                .build();
+        Secret existingSecret =
+                new SecretBuilder()
+                        .withNewMetadata()
+                        .withName(SecretDependentResource.SECRET_NAME)
+                        .withNamespace("bu-alice")
+                        .addToLabels(SecretDependentResource.KEY_ID_LABEL, "bu-alice-v1")
+                        .addToLabels(SecretDependentResource.CREATED_AT_LABEL, "1735689600")
+                        .withOwnerReferences(ownerRef)
+                        .endMetadata()
+                        .withType("Opaque")
+                        .addToData("private.pem", "old-key")
+                        .addToData("public.pem", "old-pub")
+                        .build();
 
         List<OwnerReference> refs = existingSecret.getMetadata().getOwnerReferences();
         assertNotNull(refs);
@@ -73,9 +74,11 @@ class KeyRotationReconcilerTest {
 
     @Test
     void performRotationMethodSignatureDoesNotIncludeRegistryParams() throws NoSuchMethodException {
-        // Verify performRotation no longer takes KeyRotationPolicy (which was needed for registry writes)
-        var method = KeyRotationReconciler.class.getDeclaredMethod(
-                "performRotation", String.class, String.class, Secret.class);
+        // Verify performRotation no longer takes KeyRotationPolicy (which was needed for registry
+        // writes)
+        var method =
+                KeyRotationReconciler.class.getDeclaredMethod(
+                        "performRotation", String.class, String.class, Secret.class);
         assertNotNull(method, "performRotation should take (namespace, oldKeyId, existingSecret)");
         assertEquals(3, method.getParameterCount());
     }
@@ -84,18 +87,22 @@ class KeyRotationReconcilerTest {
     void keyRotationReconcilerDoesNotReferencePublicKeyRegistry() {
         // Verify no registry-related fields or methods remain
         for (var field : KeyRotationReconciler.class.getDeclaredFields()) {
-            assertFalse(field.getType().equals(PublicKeyRegistry.class),
+            assertFalse(
+                    field.getType().equals(PublicKeyRegistry.class),
                     "KeyRotationReconciler should not have PublicKeyRegistry fields");
         }
         for (var method : KeyRotationReconciler.class.getDeclaredMethods()) {
-            assertFalse(method.getName().contains("Registry"),
-                    "KeyRotationReconciler should not have registry-related methods: " + method.getName());
+            assertFalse(
+                    method.getName().contains("Registry"),
+                    "KeyRotationReconciler should not have registry-related methods: "
+                            + method.getName());
         }
     }
 
     @Test
     void previousKeyIdLabelConstantExists() {
-        assertEquals("ce-signing.platform.io/previous-key-id",
+        assertEquals(
+                "ce-signing.platform.io/previous-key-id",
                 SecretDependentResource.PREVIOUS_KEY_ID_LABEL);
     }
 }

@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.crypto;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.crypto.signers.Ed25519Signer;
 import org.bouncycastle.openssl.PEMParser;
-
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
-import java.io.StringReader;
-import java.nio.charset.StandardCharsets;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class KeyPairGeneratorTest {
 
@@ -38,14 +36,16 @@ class KeyPairGeneratorTest {
         }
         org.bouncycastle.asn1.ASN1OctetString octetString =
                 org.bouncycastle.asn1.ASN1OctetString.getInstance(pkInfo.parsePrivateKey());
-        Ed25519PrivateKeyParameters privateKey = new Ed25519PrivateKeyParameters(octetString.getOctets(), 0);
+        Ed25519PrivateKeyParameters privateKey =
+                new Ed25519PrivateKeyParameters(octetString.getOctets(), 0);
 
         // Parse public key from PEM
         SubjectPublicKeyInfo spki;
         try (PEMParser parser = new PEMParser(new StringReader(keyPair.publicPem()))) {
             spki = (SubjectPublicKeyInfo) parser.readObject();
         }
-        Ed25519PublicKeyParameters publicKey = new Ed25519PublicKeyParameters(spki.getPublicKeyData().getBytes(), 0);
+        Ed25519PublicKeyParameters publicKey =
+                new Ed25519PublicKeyParameters(spki.getPublicKeyData().getBytes(), 0);
 
         // Sign
         byte[] data = "test data".getBytes(StandardCharsets.UTF_8);

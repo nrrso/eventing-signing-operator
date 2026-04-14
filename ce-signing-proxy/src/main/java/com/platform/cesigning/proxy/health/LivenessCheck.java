@@ -12,8 +12,6 @@ public class LivenessCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
-        return HealthCheckResponse.named("alive")
-                .up()
-                .build();
+        return HealthCheckResponse.named("alive").up().build();
     }
 }

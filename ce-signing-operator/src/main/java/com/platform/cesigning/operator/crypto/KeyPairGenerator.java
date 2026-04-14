@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.crypto;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.security.SecureRandom;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator;
 import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters;
@@ -10,17 +13,10 @@ import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.crypto.util.SubjectPublicKeyInfoFactory;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 
-import java.io.IOException;
-import java.io.StringWriter;
-import java.security.SecureRandom;
-
-/**
- * Generates Ed25519 keypairs via BouncyCastle and exports them as PEM strings.
- */
+/** Generates Ed25519 keypairs via BouncyCastle and exports them as PEM strings. */
 public class KeyPairGenerator {
 
-    private KeyPairGenerator() {
-    }
+    private KeyPairGenerator() {}
 
     public static GeneratedKeyPair generate() throws IOException {
         Ed25519KeyPairGenerator keyGen = new Ed25519KeyPairGenerator();
@@ -44,6 +40,5 @@ public class KeyPairGenerator {
         return sw.toString();
     }
 
-    public record GeneratedKeyPair(String privatePem, String publicPem) {
-    }
+    public record GeneratedKeyPair(String privatePem, String publicPem) {}
 }

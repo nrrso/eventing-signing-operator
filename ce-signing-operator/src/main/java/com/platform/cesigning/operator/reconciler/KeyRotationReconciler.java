@@ -19,24 +19,21 @@ import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import io.javaoperatorsdk.operator.processing.event.source.timer.TimerEventSource;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
-
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.jboss.logging.Logger;
 
 @ControllerConfiguration(name = "key-rotation-controller")
-public class KeyRotationReconciler
-        implements Reconciler<CloudEventSigningProducerPolicy> {
+public class KeyRotationReconciler implements Reconciler<CloudEventSigningProducerPolicy> {
 
     private static final Logger LOG = Logger.getLogger(KeyRotationReconciler.class);
     private static final long DEFAULT_CHECK_INTERVAL_MS = Duration.ofHours(1).toMillis();
 
-    @Inject
-    KubernetesClient client;
+    @Inject KubernetesClient client;
 
     private TimerEventSource<CloudEventSigningProducerPolicy> timerEventSource;
 
@@ -46,11 +43,13 @@ public class KeyRotationReconciler
             EventSourceContext<CloudEventSigningProducerPolicy> context) {
         timerEventSource = new TimerEventSource<>();
 
-        var secretInformer = new InformerEventSource<>(
-                InformerEventSourceConfiguration.from(Secret.class, CloudEventSigningProducerPolicy.class)
-                        .withLabelSelector(SecretDependentResource.KEY_ID_LABEL)
-                        .build(),
-                context);
+        var secretInformer =
+                new InformerEventSource<>(
+                        InformerEventSourceConfiguration.from(
+                                        Secret.class, CloudEventSigningProducerPolicy.class)
+                                .withLabelSelector(SecretDependentResource.KEY_ID_LABEL)
+                                .build(),
+                        context);
 
         // TimerEventSource extends AbstractEventSource<Void, HasMetadata> — raw cast needed
         List<EventSource<?, CloudEventSigningProducerPolicy>> sources = new ArrayList<>();
@@ -101,15 +100,20 @@ public class KeyRotationReconciler
             }
 
             // Rotation needed
-            LOG.infof("Key %s in namespace %s is %d days old (interval=%d), rotating",
+            LOG.infof(
+                    "Key %s in namespace %s is %d days old (interval=%d), rotating",
                     currentKeyId, namespace, daysOld, rotation.getIntervalDays());
 
             String newKeyId = performRotation(namespace, currentKeyId, secret);
 
-            context.getClient().resource(
-                    EventHelper.normalEvent(resource, "KeyRotated",
-                            "Rotated key from " + currentKeyId + " to " + newKeyId))
-                    .inNamespace(namespace).create();
+            context.getClient()
+                    .resource(
+                            EventHelper.normalEvent(
+                                    resource,
+                                    "KeyRotated",
+                                    "Rotated key from " + currentKeyId + " to " + newKeyId))
+                    .inNamespace(namespace)
+                    .create();
 
         } catch (Exception e) {
             LOG.errorf(e, "Failed key rotation check for namespace %s", namespace);
@@ -118,8 +122,8 @@ public class KeyRotationReconciler
         return UpdateControl.noUpdate();
     }
 
-    String performRotation(String namespace, String oldKeyId,
-                           Secret existingSecret) throws Exception {
+    String performRotation(String namespace, String oldKeyId, Secret existingSecret)
+            throws Exception {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
         KeyPairGenerator.GeneratedKeyPair newKeyPair = KeyPairGenerator.generate();
@@ -128,27 +132,35 @@ public class KeyRotationReconciler
         // Preserve existing owner references
         List<OwnerReference> ownerRefs = existingSecret.getMetadata().getOwnerReferences();
 
-        Secret secret = new SecretBuilder()
-                .withNewMetadata()
-                    .withName(SecretDependentResource.SECRET_NAME)
-                    .withNamespace(namespace)
-                    .addToLabels(SecretDependentResource.KEY_ID_LABEL, newKeyId)
-                    .addToLabels(SecretDependentResource.CREATED_AT_LABEL, LabelSafeTimestamp.encode(now))
-                    .addToLabels(SecretDependentResource.PREVIOUS_KEY_ID_LABEL, oldKeyId)
-                .endMetadata()
-                .withType("Opaque")
-                .addToData(SecretDependentResource.PRIVATE_KEY_FIELD,
-                        Base64.getEncoder().encodeToString(newKeyPair.privatePem().getBytes()))
-                .addToData(SecretDependentResource.PUBLIC_KEY_FIELD,
-                        Base64.getEncoder().encodeToString(newKeyPair.publicPem().getBytes()))
-                .build();
+        Secret secret =
+                new SecretBuilder()
+                        .withNewMetadata()
+                        .withName(SecretDependentResource.SECRET_NAME)
+                        .withNamespace(namespace)
+                        .addToLabels(SecretDependentResource.KEY_ID_LABEL, newKeyId)
+                        .addToLabels(
+                                SecretDependentResource.CREATED_AT_LABEL,
+                                LabelSafeTimestamp.encode(now))
+                        .addToLabels(SecretDependentResource.PREVIOUS_KEY_ID_LABEL, oldKeyId)
+                        .endMetadata()
+                        .withType("Opaque")
+                        .addToData(
+                                SecretDependentResource.PRIVATE_KEY_FIELD,
+                                Base64.getEncoder()
+                                        .encodeToString(newKeyPair.privatePem().getBytes()))
+                        .addToData(
+                                SecretDependentResource.PUBLIC_KEY_FIELD,
+                                Base64.getEncoder()
+                                        .encodeToString(newKeyPair.publicPem().getBytes()))
+                        .build();
 
         if (ownerRefs != null && !ownerRefs.isEmpty()) {
             secret.getMetadata().setOwnerReferences(new ArrayList<>(ownerRefs));
         }
 
         client.secrets().inNamespace(namespace).resource(secret).serverSideApply();
-        LOG.infof("Updated Secret with new key %s in namespace %s (previous: %s)",
+        LOG.infof(
+                "Updated Secret with new key %s in namespace %s (previous: %s)",
                 newKeyId, namespace, oldKeyId);
 
         return newKeyId;

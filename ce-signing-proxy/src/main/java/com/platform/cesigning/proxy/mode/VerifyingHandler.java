@@ -16,28 +16,23 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
-import org.jboss.logging.Logger;
-
 import java.util.*;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class VerifyingHandler {
 
     private static final Logger LOG = Logger.getLogger(VerifyingHandler.class);
-    private static final List<String> SIGNATURE_EXTENSIONS = List.of(
-            "cesignature", "cesignaturealg", "cekeyid", "cecanonattrs");
+    private static final List<String> SIGNATURE_EXTENSIONS =
+            List.of("cesignature", "cesignaturealg", "cekeyid", "cecanonattrs");
 
-    @Inject
-    ProxyConfig config;
+    @Inject ProxyConfig config;
 
-    @Inject
-    RegistryKeyCache keyCache;
+    @Inject RegistryKeyCache keyCache;
 
-    @Inject
-    MeterRegistry meterRegistry;
+    @Inject MeterRegistry meterRegistry;
 
-    @Inject
-    Tracer tracer;
+    @Inject Tracer tracer;
 
     private Set<String> trustedNamespaces;
     private boolean rejectUnsigned;
@@ -52,27 +47,34 @@ public class VerifyingHandler {
         if (!"verify".equals(config.mode())) {
             return;
         }
-        trustedNamespaces = config.verify().trustedNamespaces()
-                .map(HashSet::new)
-                .orElse(new HashSet<>());
+        trustedNamespaces =
+                config.verify().trustedNamespaces().map(HashSet::new).orElse(new HashSet<>());
         rejectUnsigned = config.verify().rejectUnsigned();
-        LOG.infof("Verifying handler initialized: trustedNamespaces=%s, rejectUnsigned=%s",
+        LOG.infof(
+                "Verifying handler initialized: trustedNamespaces=%s, rejectUnsigned=%s",
                 trustedNamespaces, rejectUnsigned);
 
-        validCounter = Counter.builder("ce_signing_events_total")
-                .tag("mode", "verify").tag("status", "valid")
-                .register(meterRegistry);
-        invalidCounter = Counter.builder("ce_signing_events_total")
-                .tag("mode", "verify").tag("status", "rejected")
-                .register(meterRegistry);
-        unsignedCounter = Counter.builder("ce_signing_events_total")
-                .tag("mode", "verify").tag("status", "unsigned")
-                .register(meterRegistry);
-        errorCounter = Counter.builder("ce_signing_events_total")
-                .tag("mode", "verify").tag("status", "error")
-                .register(meterRegistry);
-        verifyTimer = Timer.builder("ce_verification_duration_seconds")
-                .register(meterRegistry);
+        validCounter =
+                Counter.builder("ce_signing_events_total")
+                        .tag("mode", "verify")
+                        .tag("status", "valid")
+                        .register(meterRegistry);
+        invalidCounter =
+                Counter.builder("ce_signing_events_total")
+                        .tag("mode", "verify")
+                        .tag("status", "rejected")
+                        .register(meterRegistry);
+        unsignedCounter =
+                Counter.builder("ce_signing_events_total")
+                        .tag("mode", "verify")
+                        .tag("status", "unsigned")
+                        .register(meterRegistry);
+        errorCounter =
+                Counter.builder("ce_signing_events_total")
+                        .tag("mode", "verify")
+                        .tag("status", "error")
+                        .register(meterRegistry);
+        verifyTimer = Timer.builder("ce_verification_duration_seconds").register(meterRegistry);
     }
 
     public Response verify(CloudEvent event) {
@@ -82,8 +84,10 @@ public class VerifyingHandler {
     private Response doVerify(CloudEvent event) {
         try {
             // Check all four signature extensions as complete set
-            boolean hasAllExtensions = SIGNATURE_EXTENSIONS.stream()
-                    .allMatch(ext -> event.getExtension(Objects.requireNonNull(ext)) != null);
+            boolean hasAllExtensions =
+                    SIGNATURE_EXTENSIONS.stream()
+                            .allMatch(
+                                    ext -> event.getExtension(Objects.requireNonNull(ext)) != null);
 
             if (!hasAllExtensions) {
                 return handleUnsigned(event);
@@ -97,14 +101,19 @@ public class VerifyingHandler {
             if (!"ed25519".equals(cesignaturealg)) {
                 LOG.warnf("Unsupported signature algorithm: %s", cesignaturealg);
                 invalidCounter.increment();
-                return Response.status(403).entity("Unsupported algorithm: " + cesignaturealg).build();
+                return Response.status(403)
+                        .entity("Unsupported algorithm: " + cesignaturealg)
+                        .build();
             }
 
-            Span span = tracer.spanBuilder("ce-verify")
-                    .setAttribute("ce.type", Objects.requireNonNull(event.getType()))
-                    .setAttribute("ce.source", Objects.requireNonNull(event.getSource().toString()))
-                    .setAttribute("ce.keyid", Objects.requireNonNull(cekeyid))
-                    .startSpan();
+            Span span =
+                    tracer.spanBuilder("ce-verify")
+                            .setAttribute("ce.type", Objects.requireNonNull(event.getType()))
+                            .setAttribute(
+                                    "ce.source",
+                                    Objects.requireNonNull(event.getSource().toString()))
+                            .setAttribute("ce.keyid", Objects.requireNonNull(cekeyid))
+                            .startSpan();
             try {
                 // Look up key
                 Optional<PublicKeyEntry> entryOpt = keyCache.getEntry(cekeyid);
@@ -127,7 +136,9 @@ public class VerifyingHandler {
 
                 // Check key status
                 if (!entry.isUsableForVerification()) {
-                    LOG.warnf("Key %s has status %s, not usable for verification", cekeyid, entry.status());
+                    LOG.warnf(
+                            "Key %s has status %s, not usable for verification",
+                            cekeyid, entry.status());
                     invalidCounter.increment();
                     span.setAttribute("ce.verified", false);
                     return Response.status(403).entity("Key expired").build();
@@ -149,7 +160,8 @@ public class VerifyingHandler {
                     // Return event as-is with signatures intact
                     return Response.ok(event).build();
                 } else {
-                    LOG.warnf("Invalid signature for event type=%s source=%s keyid=%s",
+                    LOG.warnf(
+                            "Invalid signature for event type=%s source=%s keyid=%s",
                             event.getType(), event.getSource(), cekeyid);
                     invalidCounter.increment();
                     span.setAttribute("ce.verified", false);
@@ -162,7 +174,8 @@ public class VerifyingHandler {
             LOG.error("Verification failed", e);
             errorCounter.increment();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("Verification error").build();
+                    .entity("Verification error")
+                    .build();
         }
     }
 
@@ -171,7 +184,9 @@ public class VerifyingHandler {
             unsignedCounter.increment();
             return Response.status(403).entity("Unsigned event rejected").build();
         }
-        LOG.warnf("Unsigned event passed through: type=%s source=%s", event.getType(), event.getSource());
+        LOG.warnf(
+                "Unsigned event passed through: type=%s source=%s",
+                event.getType(), event.getSource());
         unsignedCounter.increment();
         return Response.ok(event).build();
     }
