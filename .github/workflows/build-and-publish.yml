@@ -3,6 +3,7 @@ name: Build and Publish
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 env:
   MAVEN_OPTS: "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
@@ -10,13 +11,30 @@ env:
   REGISTRY_GROUP: ${{ github.repository }}
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      proxy: ${{ steps.filter.outputs.proxy }}
+      operator: ${{ steps.filter.outputs.operator }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            proxy:
+              - 'ce-signing-proxy/**'
+              - 'pom.xml'
+            operator:
+              - 'ce-signing-operator/**'
+              - 'pom.xml'
+
   build-ce-signing-proxy:
     runs-on: ubuntu-latest
-    if: >-
-      contains(toJSON(github.event.commits.*.modified), 'ce-signing-proxy/') ||
-      contains(toJSON(github.event.commits.*.added), 'ce-signing-proxy/') ||
-      contains(toJSON(github.event.commits.*.modified), 'pom.xml') ||
-      contains(toJSON(github.event.commits.*.added), 'pom.xml')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.proxy == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -59,11 +77,8 @@ jobs:
 
   build-ce-signing-operator:
     runs-on: ubuntu-latest
-    if: >-
-      contains(toJSON(github.event.commits.*.modified), 'ce-signing-operator/') ||
-      contains(toJSON(github.event.commits.*.added), 'ce-signing-operator/') ||
-      contains(toJSON(github.event.commits.*.modified), 'pom.xml') ||
-      contains(toJSON(github.event.commits.*.added), 'pom.xml')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.operator == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
