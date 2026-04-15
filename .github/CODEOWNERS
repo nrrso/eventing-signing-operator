@@ -1,0 +1,13 @@
+# Default owner for everything
+* @nrrso
+
+# Crypto and canonicalization — changes here are signature-breaking
+ce-signing-proxy/src/main/java/**/CanonicalForm.java @nrrso
+ce-signing-proxy/src/main/java/**/Sign*.java @nrrso
+ce-signing-proxy/src/main/java/**/Verif*.java @nrrso
+
+# CRDs — API contract
+ce-signing-operator/src/main/helm/crds/ @nrrso
+
+# CI/CD
+.github/ @nrrso

@@ -1,3 +1,6 @@
+> Please ensure **"Allow edits from maintainers"** is checked on your PR.
+> This lets us fix small issues directly instead of round-tripping review comments.
+
 Closes {LINK TO GH ISSUE}
 
 
@@ -14,11 +17,9 @@ Use this section for review hints, explanations or discussion points/todos.
 How to contribute: https://github.com/nrrso/eventing-signing-operator/blob/main/.github/CONTRIBUTING.md
 
 
-## Screenshots
+## Logs (optional)
 
-Screenshots or a screen recording of the visual changes associated with this PR.
-
-(Feel free to delete this section for non-visual changes.)
+Logs of the changes associated with this PR.
 
 
 ## Docs
@@ -36,6 +37,11 @@ it's really helpful.
 - [ ] Wrote tests for new components/features
 - [ ] Ran the linter to ensure style guidelines were followed
 - [ ] Created a demo
+
+**Security and architecture (if applicable):**
+- [ ] No changes to canonical form or signing paths without property-based tests
+- [ ] No private key material in logs, status, or non-Secret resources
+- [ ] Used JOSDK dependent-resource patterns (not manual `context.getClient()` calls)
 
 
 ## Developer Certificate of Origin

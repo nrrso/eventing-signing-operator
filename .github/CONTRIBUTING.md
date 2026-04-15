@@ -65,8 +65,27 @@ Check the ../Makefile for helpful dev commands.
 4. Run the linter: `mvn spotless:check` (fix with `mvn spotless:apply`)
 5. Open a pull request against `main`
 
+## Patterns and Constraints
+
+This project has security-critical invariants that are easy to violate if you are unfamiliar with the architecture. PRs that break these rules will be rejected. Please read `docs/ARCHITECTURE.md` for full context.
+
+**Canonicalization is signature-breaking.** Any change to `CanonicalForm.java` invalidates all existing signatures. Changes to canonical form or signing paths require property-based tests covering unicode, nested JSON, and numeric edge cases.
+
+**Use JOSDK dependent resources.** Kubernetes resources must be managed via `CRUDKubernetesDependentResource` (or `Creator`-only for Secrets), not manual `context.getClient().create()` calls. The operator framework handles lifecycle and caching.
+
+**Secrets are create-only.** `SecretDependentResource` implements only the `Creator` trait to prevent accidental key material overwrites. Never add update logic to Secret resources.
+
+**ProducerPolicyReconciler is the sole writer to PublicKeyRegistry.** No other reconciler or component may write to the cluster-scoped `PublicKeyRegistry` resource. This invariant prevents key distribution conflicts.
+
+**BouncyCastle Ed25519 directly, not JCA.** We use BouncyCastle's Ed25519 API directly (not the JCA wrapper) for GraalVM native-image compatibility. Do not refactor crypto code to use `java.security` interfaces.
+
+**Private keys must never appear outside Secrets.** No private key material in logs, operator status, registry, events, or any non-Secret Kubernetes resource.
+
+**All four signature extensions are a complete set.** `cesignature`, `cesignaturealg`, `cekeyid`, and `cecanonattrs` must all be present. Partial presence means the event is treated as unsigned.
+
 ## Pull Requests
 
+- Ensure **"Allow edits from maintainers"** is checked on your PR
 - Link the relevant GitHub issue in the PR description
 - Keep PRs focused — one logical change per PR
 - Add tests for new functionality

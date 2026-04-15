@@ -1,0 +1,28 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  MAVEN_OPTS: "-Dmaven.repo.local=${{ github.workspace }}/.m2/repository"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: maven:3.9.9-eclipse-temurin-21
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: .m2/repository
+          key: maven-cache-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-cache-
+
+      - name: Build, lint, and test
+        run: mvn -B verify
