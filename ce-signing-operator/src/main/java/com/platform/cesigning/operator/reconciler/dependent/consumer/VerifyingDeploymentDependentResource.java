@@ -12,6 +12,7 @@ import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDep
 import jakarta.inject.Inject;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @KubernetesDependent
@@ -25,12 +26,17 @@ public class VerifyingDeploymentDependentResource
     static final Set<String> RESERVED_ENV_KEYS =
             Set.of(
                     "CE_SIGNING_MODE",
-                    "CE_SIGNING_TRUSTED_NAMESPACES",
-                    "CE_SIGNING_REJECT_UNSIGNED");
+                    "CE_SIGNING_TRUSTED_SOURCES",
+                    "CE_SIGNING_REJECT_UNSIGNED",
+                    "CE_CLUSTER_NAME");
 
     @Inject
     @ConfigProperty(name = "cesigning.proxy.image")
     String defaultProxyImage;
+
+    @Inject
+    @ConfigProperty(name = "cesigning.cluster.name")
+    String clusterName;
 
     public VerifyingDeploymentDependentResource() {
         super(Deployment.class);
@@ -43,7 +49,10 @@ public class VerifyingDeploymentDependentResource
         String namespace = primary.getMetadata().getNamespace();
         var spec = primary.getSpec();
         ProxyConfig proxy = spec.getProxy();
-        String trustedNs = String.join(",", spec.getTrustedNamespaces());
+        String trustedSources =
+                spec.getTrustedSources().stream()
+                        .map(ts -> ts.getCluster() + "/" + ts.getNamespace())
+                        .collect(Collectors.joining(","));
         Map<String, String> labels = verifierLabels();
 
         ProxyConfig.TopologyConfig topo = proxy.getTopologySpreadConstraints();
@@ -82,12 +91,16 @@ public class VerifyingDeploymentDependentResource
                         .withValue("verify")
                         .endEnv()
                         .addNewEnv()
-                        .withName("CE_SIGNING_TRUSTED_NAMESPACES")
-                        .withValue(trustedNs)
+                        .withName("CE_SIGNING_TRUSTED_SOURCES")
+                        .withValue(trustedSources)
                         .endEnv()
                         .addNewEnv()
                         .withName("CE_SIGNING_REJECT_UNSIGNED")
                         .withValue(String.valueOf(spec.isRejectUnsigned()))
+                        .endEnv()
+                        .addNewEnv()
+                        .withName("CE_CLUSTER_NAME")
+                        .withValue(clusterName)
                         .endEnv();
 
         proxy.getEnv().entrySet().stream()

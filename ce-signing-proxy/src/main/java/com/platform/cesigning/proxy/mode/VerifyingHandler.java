@@ -24,7 +24,7 @@ public class VerifyingHandler {
 
     private static final Logger LOG = Logger.getLogger(VerifyingHandler.class);
     private static final List<String> SIGNATURE_EXTENSIONS =
-            List.of("cesignature", "cesignaturealg", "cekeyid", "cecanonattrs");
+            List.of("cesignature", "cesignaturealg", "cekeyid", "cecanonattrs", "cesignercluster");
 
     @Inject ProxyConfig config;
 
@@ -34,7 +34,7 @@ public class VerifyingHandler {
 
     @Inject Tracer tracer;
 
-    private Set<String> trustedNamespaces;
+    private Set<TrustedSource> trustedSources;
     private boolean rejectUnsigned;
     private Counter validCounter;
     private Counter invalidCounter;
@@ -42,17 +42,19 @@ public class VerifyingHandler {
     private Counter errorCounter;
     private Timer verifyTimer;
 
+    /** Parsed (cluster, namespace) trust pair. */
+    record TrustedSource(String cluster, String namespace) {}
+
     @PostConstruct
     void init() {
         if (!"verify".equals(config.mode())) {
             return;
         }
-        trustedNamespaces =
-                config.verify().trustedNamespaces().map(HashSet::new).orElse(new HashSet<>());
+        trustedSources = parseTrustedSources(config.verify().trustedSources());
         rejectUnsigned = config.verify().rejectUnsigned();
         LOG.infof(
-                "Verifying handler initialized: trustedNamespaces=%s, rejectUnsigned=%s",
-                trustedNamespaces, rejectUnsigned);
+                "Verifying handler initialized: trustedSources=%s, rejectUnsigned=%s",
+                trustedSources, rejectUnsigned);
 
         validCounter =
                 Counter.builder("ce_signing_events_total")
@@ -77,13 +79,36 @@ public class VerifyingHandler {
         verifyTimer = Timer.builder("ce_verification_duration_seconds").register(meterRegistry);
     }
 
+    /**
+     * Parse trusted sources from config. Format: "cluster1/ns1,cluster2/ns2" where each entry is
+     * "cluster/namespace".
+     */
+    static Set<TrustedSource> parseTrustedSources(Optional<List<String>> raw) {
+        Set<TrustedSource> result = new HashSet<>();
+        raw.ifPresent(
+                list -> {
+                    for (String entry : list) {
+                        String trimmed = entry.trim();
+                        if (trimmed.isEmpty()) continue;
+                        int slash = trimmed.indexOf('/');
+                        if (slash > 0 && slash < trimmed.length() - 1) {
+                            result.add(
+                                    new TrustedSource(
+                                            trimmed.substring(0, slash),
+                                            trimmed.substring(slash + 1)));
+                        }
+                    }
+                });
+        return result;
+    }
+
     public Response verify(CloudEvent event) {
         return verifyTimer.record(() -> doVerify(event));
     }
 
     private Response doVerify(CloudEvent event) {
         try {
-            // Check all four signature extensions as complete set
+            // Check all five signature extensions as complete set
             boolean hasAllExtensions =
                     SIGNATURE_EXTENSIONS.stream()
                             .allMatch(
@@ -97,6 +122,7 @@ public class VerifyingHandler {
             String cesignaturealg = event.getExtension("cesignaturealg").toString();
             String cekeyid = event.getExtension("cekeyid").toString();
             String cecanonattrs = event.getExtension("cecanonattrs").toString();
+            String cesignercluster = event.getExtension("cesignercluster").toString();
 
             if (!"ed25519".equals(cesignaturealg)) {
                 LOG.warnf("Unsupported signature algorithm: %s", cesignaturealg);
@@ -113,12 +139,13 @@ public class VerifyingHandler {
                                     "ce.source",
                                     Objects.requireNonNull(event.getSource().toString()))
                             .setAttribute("ce.keyid", Objects.requireNonNull(cekeyid))
+                            .setAttribute("ce.cluster", Objects.requireNonNull(cesignercluster))
                             .startSpan();
             try {
-                // Look up key
-                Optional<PublicKeyEntry> entryOpt = keyCache.getEntry(cekeyid);
+                // Look up key by composite (cluster, keyId)
+                Optional<PublicKeyEntry> entryOpt = keyCache.getEntry(cesignercluster, cekeyid);
                 if (entryOpt.isEmpty()) {
-                    LOG.warnf("Unknown key ID: %s", cekeyid);
+                    LOG.warnf("Unknown key: cluster=%s, keyId=%s", cesignercluster, cekeyid);
                     invalidCounter.increment();
                     span.setAttribute("ce.verified", false);
                     return Response.status(403).entity("Unknown key").build();
@@ -126,12 +153,15 @@ public class VerifyingHandler {
 
                 PublicKeyEntry entry = entryOpt.get();
 
-                // Check namespace trust
-                if (!trustedNamespaces.contains(entry.namespace())) {
-                    LOG.warnf("Untrusted namespace: %s for key %s", entry.namespace(), cekeyid);
+                // Check (cluster, namespace) trust
+                if (!trustedSources.contains(
+                        new TrustedSource(entry.cluster(), entry.namespace()))) {
+                    LOG.warnf(
+                            "Untrusted source: cluster=%s, namespace=%s for key %s",
+                            entry.cluster(), entry.namespace(), cekeyid);
                     invalidCounter.increment();
                     span.setAttribute("ce.verified", false);
-                    return Response.status(403).entity("Untrusted namespace").build();
+                    return Response.status(403).entity("Untrusted source").build();
                 }
 
                 // Check key status
@@ -161,8 +191,8 @@ public class VerifyingHandler {
                     return Response.ok(event).build();
                 } else {
                     LOG.warnf(
-                            "Invalid signature for event type=%s source=%s keyid=%s",
-                            event.getType(), event.getSource(), cekeyid);
+                            "Invalid signature for event type=%s source=%s keyid=%s cluster=%s",
+                            event.getType(), event.getSource(), cekeyid, cesignercluster);
                     invalidCounter.increment();
                     span.setAttribute("ce.verified", false);
                     return Response.status(403).entity("Invalid signature").build();

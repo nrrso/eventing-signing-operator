@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 
 public record PublicKeyEntry(
+        String cluster,
         String namespace,
         String keyId,
         Ed25519PublicKeyParameters publicKey,

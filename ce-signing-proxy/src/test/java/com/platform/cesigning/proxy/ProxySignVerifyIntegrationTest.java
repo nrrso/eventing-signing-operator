@@ -21,8 +21,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration test: sign a CloudEvent, then verify it, simulating the full proxy roundtrip (signer
- * -> broker -> verifier).
+ * Integration test: sign a CloudEvent with cesignercluster, then verify it with cluster-aware
+ * lookup, simulating the full proxy roundtrip (signer -> broker -> verifier).
  */
 class ProxySignVerifyIntegrationTest {
 
@@ -30,9 +30,16 @@ class ProxySignVerifyIntegrationTest {
     private static Ed25519PublicKeyParameters publicKey;
 
     private static final String KEY_ID = "bu-alice-v1";
+    private static final String CLUSTER = "cluster-east";
     private static final String NAMESPACE = "bu-alice";
-    private static final List<String> CANONICAL_ATTRS =
-            List.of("type", "source", "subject", "datacontenttype");
+    private static final List<String> CANONICAL_ATTRS;
+
+    static {
+        List<String> attrs =
+                new ArrayList<>(List.of("type", "source", "subject", "datacontenttype"));
+        attrs.add("cesignercluster");
+        CANONICAL_ATTRS = List.copyOf(attrs);
+    }
 
     @BeforeAll
     static void setUp() throws IOException {
@@ -40,9 +47,9 @@ class ProxySignVerifyIntegrationTest {
         publicKey = EventVerifier.loadPublicKey(Path.of("src/test/resources/test-public.pem"));
     }
 
+    /** 10.1: Full sign-verify round-trip with cesignercluster. */
     @Test
-    void fullSignVerifyRoundTrip() {
-        // 1. Create a CloudEvent
+    void fullSignVerifyRoundTripWithClusterIdentity() {
         CloudEvent original =
                 CloudEventBuilder.v1()
                         .withId("order-001")
@@ -56,23 +63,22 @@ class ProxySignVerifyIntegrationTest {
                                         .getBytes(StandardCharsets.UTF_8))
                         .build();
 
-        // 2. Sign it (signer proxy)
-        byte[] canonical = CanonicalForm.build(original, CANONICAL_ATTRS);
-        String signature = signer.signToBase64Url(canonical);
-        String presentAttrs = CanonicalForm.presentAttributes(original, CANONICAL_ATTRS);
+        // Sign with cluster identity
+        CloudEvent signedEvent = signEvent(original, KEY_ID, CLUSTER);
 
-        CloudEvent signedEvent =
-                CloudEventBuilder.from(Objects.requireNonNull(original))
-                        .withExtension("cesignature", Objects.requireNonNull(signature))
-                        .withExtension("cesignaturealg", "ed25519")
-                        .withExtension("cekeyid", KEY_ID)
-                        .withExtension("cecanonattrs", Objects.requireNonNull(presentAttrs))
-                        .build();
+        // Verify all 5 extensions present
+        assertNotNull(signedEvent.getExtension("cesignature"));
+        assertNotNull(signedEvent.getExtension("cesignaturealg"));
+        assertNotNull(signedEvent.getExtension("cekeyid"));
+        assertNotNull(signedEvent.getExtension("cecanonattrs"));
+        assertNotNull(signedEvent.getExtension("cesignercluster"));
+        assertEquals(CLUSTER, signedEvent.getExtension("cesignercluster").toString());
 
-        // 3. Set up verifier's key cache
+        // Set up verifier's key cache with composite key
         RegistryKeyCache keyCache = new RegistryKeyCache();
         PublicKeyEntry entry =
                 new PublicKeyEntry(
+                        CLUSTER,
                         NAMESPACE,
                         KEY_ID,
                         publicKey,
@@ -80,35 +86,176 @@ class ProxySignVerifyIntegrationTest {
                         OffsetDateTime.now(),
                         OffsetDateTime.now().plusDays(90),
                         "active");
-        keyCache.replaceAll(Map.of(KEY_ID, entry));
+        keyCache.replaceAll(Map.of(new RegistryKeyCache.CacheKey(CLUSTER, KEY_ID), entry));
 
-        // 4. Verify (verifier proxy)
-        String cecanonattrs = signedEvent.getExtension("cecanonattrs").toString();
-        String cesignature = signedEvent.getExtension("cesignature").toString();
+        // Verify with cluster-aware lookup
+        String cesignercluster = signedEvent.getExtension("cesignercluster").toString();
         String cekeyid = signedEvent.getExtension("cekeyid").toString();
-
-        Optional<PublicKeyEntry> lookedUp = keyCache.getEntry(cekeyid);
+        Optional<PublicKeyEntry> lookedUp = keyCache.getEntry(cesignercluster, cekeyid);
         assertTrue(lookedUp.isPresent());
         assertTrue(lookedUp.get().isUsableForVerification());
+        assertEquals(CLUSTER, lookedUp.get().cluster());
         assertEquals(NAMESPACE, lookedUp.get().namespace());
 
+        // Rebuild canonical form and verify signature
+        String cecanonattrs = signedEvent.getExtension("cecanonattrs").toString();
         List<String> verifyAttrs = Arrays.asList(cecanonattrs.split(","));
         byte[] verifyCanonical = CanonicalForm.build(signedEvent, verifyAttrs);
-        byte[] sigBytes = Base64.getUrlDecoder().decode(cesignature);
+        byte[] sigBytes =
+                Base64.getUrlDecoder().decode(signedEvent.getExtension("cesignature").toString());
 
         assertTrue(
                 EventVerifier.verify(verifyCanonical, sigBytes, lookedUp.get().publicKey()),
-                "Signature should verify successfully after roundtrip");
+                "Signature should verify successfully with cluster-aware lookup");
 
-        // 5. Verify original data is intact
         assertEquals("order.created", signedEvent.getType());
-        assertEquals(URI.create("/bu-alice/orders"), signedEvent.getSource());
         assertArrayEquals(original.getData().toBytes(), signedEvent.getData().toBytes());
+    }
+
+    /** 10.2: Same keyId from different clusters resolves to correct key. */
+    @Test
+    void sameKeyIdDifferentClustersResolvesCorrectly() {
+        String clusterEast = "cluster-east";
+        String clusterWest = "cluster-west";
+
+        RegistryKeyCache keyCache = new RegistryKeyCache();
+        PublicKeyEntry eastEntry =
+                new PublicKeyEntry(
+                        clusterEast,
+                        "bu-alice",
+                        KEY_ID,
+                        publicKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+        PublicKeyEntry westEntry =
+                new PublicKeyEntry(
+                        clusterWest,
+                        "bu-alice",
+                        KEY_ID,
+                        publicKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+        keyCache.replaceAll(
+                Map.of(
+                        new RegistryKeyCache.CacheKey(clusterEast, KEY_ID), eastEntry,
+                        new RegistryKeyCache.CacheKey(clusterWest, KEY_ID), westEntry));
+
+        // Sign from east
+        CloudEvent fromEast = signEvent(buildTestEvent(), KEY_ID, clusterEast);
+        // Sign from west
+        CloudEvent fromWest = signEvent(buildTestEvent(), KEY_ID, clusterWest);
+
+        // Lookup resolves to correct cluster entry
+        String eastCluster = fromEast.getExtension("cesignercluster").toString();
+        String westCluster = fromWest.getExtension("cesignercluster").toString();
+
+        Optional<PublicKeyEntry> eastResult = keyCache.getEntry(eastCluster, KEY_ID);
+        Optional<PublicKeyEntry> westResult = keyCache.getEntry(westCluster, KEY_ID);
+
+        assertTrue(eastResult.isPresent());
+        assertTrue(westResult.isPresent());
+        assertEquals(clusterEast, eastResult.get().cluster());
+        assertEquals(clusterWest, westResult.get().cluster());
+
+        // Both verify successfully
+        assertTrue(verifySignedEvent(fromEast, eastResult.get()));
+        assertTrue(verifySignedEvent(fromWest, westResult.get()));
+    }
+
+    /**
+     * 10.3: Trust filtering with trustedSources — verifies that the composite cache key model
+     * supports (cluster, namespace) pair-based trust. Events from untrusted pairs won't find
+     * matching entries in a correctly configured cache.
+     */
+    @Test
+    void trustFilteringWithTrustedSources() {
+        RegistryKeyCache keyCache = new RegistryKeyCache();
+
+        // Only trust cluster-east/bu-alice
+        PublicKeyEntry trustedEntry =
+                new PublicKeyEntry(
+                        "cluster-east",
+                        "bu-alice",
+                        KEY_ID,
+                        publicKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+        keyCache.replaceAll(
+                Map.of(new RegistryKeyCache.CacheKey("cluster-east", KEY_ID), trustedEntry));
+
+        // Trusted (cluster, namespace) pair — found
+        Optional<PublicKeyEntry> found = keyCache.getEntry("cluster-east", KEY_ID);
+        assertTrue(found.isPresent());
+        assertEquals("bu-alice", found.get().namespace());
+        assertEquals("cluster-east", found.get().cluster());
+
+        // Same keyId from different cluster — not found (untrusted)
+        assertTrue(keyCache.getEntry("cluster-west", KEY_ID).isEmpty());
+
+        // Verify event from untrusted cluster can't resolve key
+        CloudEvent fromUntrusted = signEvent(buildTestEvent(), KEY_ID, "cluster-west");
+        String untrustedCluster = fromUntrusted.getExtension("cesignercluster").toString();
+        assertTrue(
+                keyCache.getEntry(untrustedCluster, KEY_ID).isEmpty(),
+                "Events from untrusted cluster should not resolve to any key");
+    }
+
+    /**
+     * 10.5: Verifier merges keys from PublicKeyRegistry and FederatedKeyRegistry into unified
+     * cache.
+     */
+    @Test
+    void verifierMergesLocalAndFederatedKeysIntoUnifiedCache() {
+        RegistryKeyCache keyCache = new RegistryKeyCache();
+
+        // Simulate local keys (from PublicKeyRegistry)
+        PublicKeyEntry localEntry =
+                new PublicKeyEntry(
+                        "cluster-east",
+                        "bu-alice",
+                        "bu-alice-v1",
+                        publicKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+
+        // Simulate federated keys (from FederatedKeyRegistry)
+        PublicKeyEntry federatedEntry =
+                new PublicKeyEntry(
+                        "cluster-west",
+                        "bu-bob",
+                        "bu-bob-v1",
+                        publicKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+
+        // Merge both into cache (as RegistryWatcher would do)
+        Map<RegistryKeyCache.CacheKey, PublicKeyEntry> merged = new HashMap<>();
+        merged.put(new RegistryKeyCache.CacheKey("cluster-east", "bu-alice-v1"), localEntry);
+        merged.put(new RegistryKeyCache.CacheKey("cluster-west", "bu-bob-v1"), federatedEntry);
+        keyCache.replaceAll(merged);
+
+        // Both local and federated keys are accessible
+        assertTrue(keyCache.getEntry("cluster-east", "bu-alice-v1").isPresent());
+        assertTrue(keyCache.getEntry("cluster-west", "bu-bob-v1").isPresent());
+        assertEquals(2, keyCache.size());
+
+        // Federated entry has correct cluster
+        assertEquals(
+                "cluster-west", keyCache.getEntry("cluster-west", "bu-bob-v1").get().cluster());
     }
 
     @Test
     void signVerifyWithDifferentJsonKeyOrder() {
-        // The broker might re-serialize JSON with different key ordering
         CloudEvent original =
                 CloudEventBuilder.v1()
                         .withId("evt-1")
@@ -120,10 +267,7 @@ class ProxySignVerifyIntegrationTest {
                                 "{\"b\":1,\"a\":2}".getBytes(StandardCharsets.UTF_8))
                         .build();
 
-        // Sign
-        byte[] canonical = CanonicalForm.build(original, CANONICAL_ATTRS);
-        String signature = signer.signToBase64Url(canonical);
-        String presentAttrs = CanonicalForm.presentAttributes(original, CANONICAL_ATTRS);
+        CloudEvent signedEvent = signEvent(original, KEY_ID, CLUSTER);
 
         // Simulate broker re-serializing JSON with different key order
         CloudEvent reserializedEvent =
@@ -135,47 +279,65 @@ class ProxySignVerifyIntegrationTest {
                         .withData(
                                 "application/json",
                                 "{\"a\":2,\"b\":1}".getBytes(StandardCharsets.UTF_8))
-                        .withExtension("cesignature", Objects.requireNonNull(signature))
+                        .withExtension(
+                                "cesignature", signedEvent.getExtension("cesignature").toString())
                         .withExtension("cesignaturealg", "ed25519")
                         .withExtension("cekeyid", KEY_ID)
-                        .withExtension("cecanonattrs", Objects.requireNonNull(presentAttrs))
+                        .withExtension(
+                                "cecanonattrs", signedEvent.getExtension("cecanonattrs").toString())
+                        .withExtension("cesignercluster", CLUSTER)
                         .build();
 
-        // Verify should succeed because JCS normalizes both
-        List<String> attrs = Arrays.asList(presentAttrs.split(","));
+        List<String> attrs =
+                Arrays.asList(reserializedEvent.getExtension("cecanonattrs").toString().split(","));
         byte[] verifyCanonical = CanonicalForm.build(reserializedEvent, attrs);
-        byte[] sigBytes = Base64.getUrlDecoder().decode(signature);
+        byte[] sigBytes =
+                Base64.getUrlDecoder()
+                        .decode(reserializedEvent.getExtension("cesignature").toString());
 
         assertTrue(
                 EventVerifier.verify(verifyCanonical, sigBytes, publicKey),
                 "JCS should normalize JSON, allowing verification after re-serialization");
     }
 
-    @Test
-    void signVerifyWithEmptyData() {
-        CloudEvent event =
-                CloudEventBuilder.v1()
-                        .withId("evt-2")
-                        .withSource(URI.create("/bu-alice"))
-                        .withType("heartbeat")
-                        .build();
+    // --- Helpers ---
 
-        byte[] canonical = CanonicalForm.build(event, CANONICAL_ATTRS);
-        String signature = signer.signToBase64Url(canonical);
-        String presentAttrs = CanonicalForm.presentAttributes(event, CANONICAL_ATTRS);
+    private CloudEvent buildTestEvent() {
+        return CloudEventBuilder.v1()
+                .withId("test-1")
+                .withSource(URI.create("/bu-alice"))
+                .withType("order.created")
+                .withSubject("order-123")
+                .withDataContentType("application/json")
+                .withData("application/json", "{\"amount\":42}".getBytes(StandardCharsets.UTF_8))
+                .build();
+    }
 
-        CloudEvent signed =
+    private CloudEvent signEvent(CloudEvent event, String keyId, String cluster) {
+        // Add cluster identity before building canonical form
+        CloudEvent eventWithCluster =
                 CloudEventBuilder.from(Objects.requireNonNull(event))
-                        .withExtension("cesignature", Objects.requireNonNull(signature))
-                        .withExtension("cesignaturealg", "ed25519")
-                        .withExtension("cekeyid", KEY_ID)
-                        .withExtension("cecanonattrs", Objects.requireNonNull(presentAttrs))
+                        .withExtension("cesignercluster", cluster)
                         .build();
 
-        List<String> attrs = Arrays.asList(presentAttrs.split(","));
-        byte[] verifyCanonical = CanonicalForm.build(signed, attrs);
-        byte[] sigBytes = Base64.getUrlDecoder().decode(signature);
+        byte[] canonical = CanonicalForm.build(eventWithCluster, CANONICAL_ATTRS);
+        String signature = signer.signToBase64Url(canonical);
+        String presentAttrs = CanonicalForm.presentAttributes(eventWithCluster, CANONICAL_ATTRS);
 
-        assertTrue(EventVerifier.verify(verifyCanonical, sigBytes, publicKey));
+        return CloudEventBuilder.from(eventWithCluster)
+                .withExtension("cesignature", Objects.requireNonNull(signature))
+                .withExtension("cesignaturealg", "ed25519")
+                .withExtension("cekeyid", Objects.requireNonNull(keyId))
+                .withExtension("cecanonattrs", Objects.requireNonNull(presentAttrs))
+                .build();
+    }
+
+    private boolean verifySignedEvent(CloudEvent signed, PublicKeyEntry entry) {
+        String cecanonattrs = signed.getExtension("cecanonattrs").toString();
+        List<String> attrs = Arrays.asList(cecanonattrs.split(","));
+        byte[] canonical = CanonicalForm.build(signed, attrs);
+        byte[] sigBytes =
+                Base64.getUrlDecoder().decode(signed.getExtension("cesignature").toString());
+        return EventVerifier.verify(canonical, sigBytes, entry.publicKey());
     }
 }

@@ -264,8 +264,9 @@ class ProducerDependentResourceTest {
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        // Only the 4 operator-managed env vars
-        assertEquals(4, envVars.size());
+        // Only the 5 operator-managed env vars (MODE, KEY_ID, CANONICAL_ATTRS, PRIVATE_KEY_PATH,
+        // CLUSTER_NAME)
+        assertEquals(5, envVars.size());
     }
 
     @Test

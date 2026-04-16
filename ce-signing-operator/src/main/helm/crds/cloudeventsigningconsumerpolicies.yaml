@@ -21,10 +21,18 @@ spec:
             spec:
               type: object
               properties:
-                trustedNamespaces:
+                trustedSources:
                   type: array
                   items:
-                    type: string
+                    type: object
+                    required: [cluster, namespace]
+                    properties:
+                      cluster:
+                        type: string
+                        description: "Cluster name to trust"
+                      namespace:
+                        type: string
+                        description: "Namespace to trust within the cluster"
                 rejectUnsigned:
                   type: boolean
                   default: true

@@ -16,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.jboss.logging.Logger;
@@ -34,6 +35,7 @@ public class SigningHandler {
     private EventSigner signer;
     private List<String> canonicalAttributes;
     private String keyId;
+    private String clusterName;
     private Counter successCounter;
     private Counter errorCounter;
     private Timer signingTimer;
@@ -56,11 +58,17 @@ public class SigningHandler {
         signingTimer = Timer.builder("ce_signing_duration_seconds").register(meterRegistry);
         try {
             signer = new EventSigner(java.nio.file.Path.of(config.privateKeyPath()));
-            canonicalAttributes = config.canonicalAttributes();
+            // Always include cesignercluster in canonical attributes
+            List<String> configured = config.canonicalAttributes();
+            canonicalAttributes = new ArrayList<>(configured);
+            if (!canonicalAttributes.contains("cesignercluster")) {
+                canonicalAttributes.add("cesignercluster");
+            }
             keyId = config.keyId();
+            clusterName = config.clusterName();
             LOG.infof(
-                    "Signing handler initialized with keyId=%s, canonicalAttributes=%s",
-                    keyId, canonicalAttributes);
+                    "Signing handler initialized with keyId=%s, clusterName=%s, canonicalAttributes=%s",
+                    keyId, clusterName, canonicalAttributes);
         } catch (IOException e) {
             LOG.error("Failed to load signing key", e);
         }
@@ -87,15 +95,25 @@ public class SigningHandler {
                                         .setAttribute("ce.keyid", Objects.requireNonNull(keyId))
                                         .startSpan();
                         try {
+                            // Add cluster identity before building canonical form
+                            CloudEvent eventWithCluster =
+                                    CloudEventBuilder.from(event)
+                                            .withExtension(
+                                                    "cesignercluster",
+                                                    Objects.requireNonNull(clusterName))
+                                            .build();
+
                             // Build canonical form and sign
-                            byte[] canonical = CanonicalForm.build(event, canonicalAttributes);
+                            byte[] canonical =
+                                    CanonicalForm.build(eventWithCluster, canonicalAttributes);
                             String signature = signer.signToBase64Url(canonical);
                             String presentAttrs =
-                                    CanonicalForm.presentAttributes(event, canonicalAttributes);
+                                    CanonicalForm.presentAttributes(
+                                            eventWithCluster, canonicalAttributes);
 
                             // Add signature extensions to the event
                             CloudEvent signedEvent =
-                                    CloudEventBuilder.from(event)
+                                    CloudEventBuilder.from(eventWithCluster)
                                             .withExtension(
                                                     "cesignature",
                                                     Objects.requireNonNull(signature))

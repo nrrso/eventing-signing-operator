@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -29,8 +30,15 @@ class SigningHandlerTest {
     private static EventSigner signer;
     private static Ed25519PublicKeyParameters publicKey;
     private static final String KEY_ID = "bu-alice-v1";
-    private static final List<String> CANONICAL_ATTRS =
-            List.of("type", "source", "subject", "datacontenttype");
+    private static final String CLUSTER_NAME = "cluster-east";
+    private static final List<String> CANONICAL_ATTRS;
+
+    static {
+        List<String> attrs =
+                new ArrayList<>(List.of("type", "source", "subject", "datacontenttype"));
+        attrs.add("cesignercluster");
+        CANONICAL_ATTRS = List.copyOf(attrs);
+    }
 
     @BeforeAll
     static void setUp() throws IOException {
@@ -39,7 +47,7 @@ class SigningHandlerTest {
     }
 
     @Test
-    void signedEventHasAllFourExtensions() {
+    void signedEventHasAllFiveExtensions() {
         CloudEvent event = buildTestEvent();
         CloudEvent signed = signEvent(event);
 
@@ -47,6 +55,22 @@ class SigningHandlerTest {
         assertNotNull(signed.getExtension("cesignaturealg"));
         assertNotNull(signed.getExtension("cekeyid"));
         assertNotNull(signed.getExtension("cecanonattrs"));
+        assertNotNull(signed.getExtension("cesignercluster"));
+    }
+
+    @Test
+    void cesignerclusterMatchesConfiguredClusterName() {
+        CloudEvent signed = signEvent(buildTestEvent());
+        assertEquals(CLUSTER_NAME, signed.getExtension("cesignercluster").toString());
+    }
+
+    @Test
+    void cesignerclusterIsIncludedInCecanonattrs() {
+        CloudEvent signed = signEvent(buildTestEvent());
+        String canonAttrs = signed.getExtension("cecanonattrs").toString();
+        assertTrue(
+                canonAttrs.contains("cesignercluster"),
+                "cesignercluster should always be included in cecanonattrs");
     }
 
     @Test
@@ -148,11 +172,17 @@ class SigningHandlerTest {
 
     /** Simulates the signing handler logic without CDI. */
     private CloudEvent signEvent(CloudEvent event) {
-        byte[] canonical = CanonicalForm.build(event, CANONICAL_ATTRS);
-        String signature = signer.signToBase64Url(canonical);
-        String presentAttrs = CanonicalForm.presentAttributes(event, CANONICAL_ATTRS);
+        // Add cluster identity before building canonical form
+        CloudEvent eventWithCluster =
+                CloudEventBuilder.from(Objects.requireNonNull(event))
+                        .withExtension("cesignercluster", CLUSTER_NAME)
+                        .build();
 
-        return CloudEventBuilder.from(Objects.requireNonNull(event))
+        byte[] canonical = CanonicalForm.build(eventWithCluster, CANONICAL_ATTRS);
+        String signature = signer.signToBase64Url(canonical);
+        String presentAttrs = CanonicalForm.presentAttributes(eventWithCluster, CANONICAL_ATTRS);
+
+        return CloudEventBuilder.from(eventWithCluster)
                 .withExtension("cesignature", Objects.requireNonNull(signature))
                 .withExtension("cesignaturealg", "ed25519")
                 .withExtension("cekeyid", KEY_ID)

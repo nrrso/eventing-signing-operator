@@ -8,6 +8,7 @@ import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicySpec;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicyStatus;
 import com.platform.cesigning.operator.crd.ProxyConfig;
+import com.platform.cesigning.operator.crd.TrustedSource;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentStatus;
@@ -35,7 +36,10 @@ class ConsumerDependentResourceTest {
         primary.setMetadata(meta);
 
         var spec = new CloudEventSigningConsumerPolicySpec();
-        spec.setTrustedNamespaces(List.of("bu-alice", "bu-carol"));
+        spec.setTrustedSources(
+                List.of(
+                        new TrustedSource("cluster-east", "bu-alice"),
+                        new TrustedSource("cluster-east", "bu-carol")));
         spec.setRejectUnsigned(true);
         spec.setProxy(new ProxyConfig());
         primary.setSpec(spec);
@@ -59,9 +63,9 @@ class ConsumerDependentResourceTest {
                         .orElseThrow()
                         .getValue());
         assertEquals(
-                "bu-alice,bu-carol",
+                "cluster-east/bu-alice,cluster-east/bu-carol",
                 envVars.stream()
-                        .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
+                        .filter(e -> "CE_SIGNING_TRUSTED_SOURCES".equals(e.getName()))
                         .findFirst()
                         .orElseThrow()
                         .getValue());
@@ -120,7 +124,7 @@ class ConsumerDependentResourceTest {
                 .setEnv(
                         Map.of(
                                 "CE_SIGNING_MODE", "sign",
-                                "CE_SIGNING_TRUSTED_NAMESPACES", "evil-ns",
+                                "CE_SIGNING_TRUSTED_SOURCES", "evil-cluster/evil-ns",
                                 "OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317"));
 
         var resource = new VerifyingDeploymentDependentResource();
@@ -136,9 +140,9 @@ class ConsumerDependentResourceTest {
                         .orElseThrow()
                         .getValue());
         assertEquals(
-                "bu-alice,bu-carol",
+                "cluster-east/bu-alice,cluster-east/bu-carol",
                 envVars.stream()
-                        .filter(e -> "CE_SIGNING_TRUSTED_NAMESPACES".equals(e.getName()))
+                        .filter(e -> "CE_SIGNING_TRUSTED_SOURCES".equals(e.getName()))
                         .findFirst()
                         .orElseThrow()
                         .getValue());
@@ -156,8 +160,9 @@ class ConsumerDependentResourceTest {
         Deployment deployment = resource.desired(primary, context);
 
         var envVars = deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv();
-        // Only the 3 operator-managed env vars
-        assertEquals(3, envVars.size());
+        // Only the 4 operator-managed env vars (MODE, TRUSTED_SOURCES, REJECT_UNSIGNED,
+        // CLUSTER_NAME)
+        assertEquals(4, envVars.size());
     }
 
     @Test

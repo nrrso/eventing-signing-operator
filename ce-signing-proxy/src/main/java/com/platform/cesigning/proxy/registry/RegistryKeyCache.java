@@ -9,19 +9,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.jboss.logging.Logger;
 
 /**
- * In-memory cache of public keys from the cluster-scoped PublicKeyRegistry. Populated by Fabric8
- * informer/Watch on PublicKeyRegistry singleton.
+ * In-memory cache of public keys from PublicKeyRegistry and FederatedKeyRegistry. Uses composite
+ * key (cluster, keyId) to support multi-cluster key resolution. Populated by Fabric8
+ * informer/Watch.
  */
 @ApplicationScoped
 public class RegistryKeyCache {
 
     private static final Logger LOG = Logger.getLogger(RegistryKeyCache.class);
 
-    private volatile ConcurrentMap<String, PublicKeyEntry> cache = new ConcurrentHashMap<>();
+    public record CacheKey(String cluster, String keyId) {}
+
+    private volatile ConcurrentMap<CacheKey, PublicKeyEntry> cache = new ConcurrentHashMap<>();
     private final AtomicBoolean synced = new AtomicBoolean(false);
 
-    public Optional<PublicKeyEntry> getEntry(String keyId) {
-        return Optional.ofNullable(cache.get(keyId));
+    public Optional<PublicKeyEntry> getEntry(String cluster, String keyId) {
+        return Optional.ofNullable(cache.get(new CacheKey(cluster, keyId)));
     }
 
     public boolean isSynced() {
@@ -29,20 +32,20 @@ public class RegistryKeyCache {
     }
 
     /** Replace all entries in the cache. Called by the informer on initial LIST and on updates. */
-    public void replaceAll(java.util.Map<String, PublicKeyEntry> entries) {
+    public void replaceAll(java.util.Map<CacheKey, PublicKeyEntry> entries) {
         cache = new ConcurrentHashMap<>(entries);
         synced.set(true);
         LOG.infof("Registry cache updated: %d entries", entries.size());
     }
 
     /** Update a single entry. Called on incremental Watch events. */
-    public void put(String keyId, PublicKeyEntry entry) {
-        cache.put(keyId, entry);
+    public void put(CacheKey key, PublicKeyEntry entry) {
+        cache.put(key, entry);
     }
 
     /** Remove an entry. */
-    public void remove(String keyId) {
-        cache.remove(keyId);
+    public void remove(CacheKey key) {
+        cache.remove(key);
     }
 
     /** Mark as synced after initial LIST completes. */

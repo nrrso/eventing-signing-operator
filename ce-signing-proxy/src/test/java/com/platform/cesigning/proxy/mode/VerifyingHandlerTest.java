@@ -4,6 +4,7 @@ package com.platform.cesigning.proxy.mode;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.platform.cesigning.proxy.config.ProxyConfig;
+import com.platform.cesigning.proxy.crypto.CanonicalForm;
 import com.platform.cesigning.proxy.crypto.EventSigner;
 import com.platform.cesigning.proxy.crypto.EventVerifier;
 import com.platform.cesigning.proxy.registry.PublicKeyEntry;
@@ -30,10 +31,17 @@ class VerifyingHandlerTest {
     private static EventSigner signer;
     private static Ed25519PublicKeyParameters publicKey;
     private static final String KEY_ID = "bu-alice-v1";
+    private static final String CLUSTER = "cluster-east";
     private static final String NAMESPACE = "bu-alice";
-    private static final List<String> CANONICAL_ATTRS =
-            List.of("type", "source", "subject", "datacontenttype");
-    private static final Set<String> TRUSTED_NAMESPACES = Set.of("bu-alice");
+    private static final List<String> CANONICAL_ATTRS;
+    private static final Set<String> TRUSTED_SOURCES = Set.of("cluster-east/bu-alice");
+
+    static {
+        List<String> attrs =
+                new ArrayList<>(List.of("type", "source", "subject", "datacontenttype"));
+        attrs.add("cesignercluster");
+        CANONICAL_ATTRS = List.copyOf(attrs);
+    }
 
     private RegistryKeyCache keyCache;
     private VerifyingHandler handler;
@@ -49,6 +57,7 @@ class VerifyingHandlerTest {
         keyCache = new RegistryKeyCache();
         PublicKeyEntry entry =
                 new PublicKeyEntry(
+                        CLUSTER,
                         NAMESPACE,
                         KEY_ID,
                         publicKey,
@@ -56,7 +65,7 @@ class VerifyingHandlerTest {
                         OffsetDateTime.now(),
                         OffsetDateTime.now().plusDays(90),
                         "active");
-        keyCache.replaceAll(Map.of(KEY_ID, entry));
+        keyCache.replaceAll(Map.of(new RegistryKeyCache.CacheKey(CLUSTER, KEY_ID), entry));
 
         handler = makeHandler(true);
     }
@@ -69,7 +78,7 @@ class VerifyingHandlerTest {
     }
 
     @Test
-    void validEventRetainsSignatureExtensions() {
+    void validEventRetainsAllFiveSignatureExtensions() {
         CloudEvent signed = signEvent(buildTestEvent());
         try (Response response = handler.verify(signed)) {
             assertEquals(200, response.getStatus());
@@ -78,6 +87,7 @@ class VerifyingHandlerTest {
         assertNotNull(signed.getExtension("cesignaturealg"));
         assertNotNull(signed.getExtension("cekeyid"));
         assertNotNull(signed.getExtension("cecanonattrs"));
+        assertNotNull(signed.getExtension("cesignercluster"));
     }
 
     @Test
@@ -94,6 +104,7 @@ class VerifyingHandlerTest {
                         .withExtension("cesignaturealg", "ed25519")
                         .withExtension("cekeyid", KEY_ID)
                         .withExtension("cecanonattrs", "source,type")
+                        .withExtension("cesignercluster", CLUSTER)
                         .build();
 
         try (Response response = handler.verify(badSigned)) {
@@ -138,9 +149,11 @@ class VerifyingHandlerTest {
     }
 
     @Test
-    void untrustedNamespaceReturns403() {
+    void untrustedSourceReturns403() {
+        String untrustedCluster = "cluster-west";
         PublicKeyEntry untrustedEntry =
                 new PublicKeyEntry(
+                        untrustedCluster,
                         "bu-eve",
                         "bu-eve-v1",
                         publicKey,
@@ -148,18 +161,44 @@ class VerifyingHandlerTest {
                         OffsetDateTime.now(),
                         OffsetDateTime.now().plusDays(90),
                         "active");
-        keyCache.put("bu-eve-v1", untrustedEntry);
+        keyCache.put(new RegistryKeyCache.CacheKey(untrustedCluster, "bu-eve-v1"), untrustedEntry);
 
-        CloudEvent signed = signEventWithKeyId(buildTestEvent(), "bu-eve-v1");
+        CloudEvent signed =
+                signEventWithKeyIdAndCluster(buildTestEvent(), "bu-eve-v1", untrustedCluster);
         try (Response response = handler.verify(signed)) {
             assertEquals(403, response.getStatus());
         }
     }
 
     @Test
+    void sameKeyIdDifferentClustersResolveCorrectly() {
+        // Add same keyId from a different cluster
+        String otherCluster = "cluster-west";
+        Ed25519PublicKeyParameters otherKey = publicKey; // same key for test simplicity
+        PublicKeyEntry otherEntry =
+                new PublicKeyEntry(
+                        otherCluster,
+                        "bu-alice",
+                        KEY_ID,
+                        otherKey,
+                        "ed25519",
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now().plusDays(90),
+                        "active");
+        keyCache.put(new RegistryKeyCache.CacheKey(otherCluster, KEY_ID), otherEntry);
+
+        // Both clusters have KEY_ID; verify cache distinguishes them
+        assertTrue(keyCache.getEntry(CLUSTER, KEY_ID).isPresent());
+        assertTrue(keyCache.getEntry(otherCluster, KEY_ID).isPresent());
+        assertEquals(CLUSTER, keyCache.getEntry(CLUSTER, KEY_ID).get().cluster());
+        assertEquals(otherCluster, keyCache.getEntry(otherCluster, KEY_ID).get().cluster());
+    }
+
+    @Test
     void expiredKeyReturns403() {
         PublicKeyEntry expired =
                 new PublicKeyEntry(
+                        CLUSTER,
                         NAMESPACE,
                         "expired-key",
                         publicKey,
@@ -167,7 +206,7 @@ class VerifyingHandlerTest {
                         OffsetDateTime.now().minusDays(100),
                         OffsetDateTime.now().minusDays(10),
                         "expired");
-        keyCache.put("expired-key", expired);
+        keyCache.put(new RegistryKeyCache.CacheKey(CLUSTER, "expired-key"), expired);
 
         CloudEvent signed = signEventWithKeyId(buildTestEvent(), "expired-key");
         try (Response response = handler.verify(signed)) {
@@ -179,6 +218,7 @@ class VerifyingHandlerTest {
     void rotatingKeyAccepted() {
         PublicKeyEntry rotating =
                 new PublicKeyEntry(
+                        CLUSTER,
                         NAMESPACE,
                         "rotating-key",
                         publicKey,
@@ -186,7 +226,7 @@ class VerifyingHandlerTest {
                         OffsetDateTime.now().minusDays(90),
                         OffsetDateTime.now().plusDays(7),
                         "rotating");
-        keyCache.put("rotating-key", rotating);
+        keyCache.put(new RegistryKeyCache.CacheKey(CLUSTER, "rotating-key"), rotating);
 
         CloudEvent signed = signEventWithKeyId(buildTestEvent(), "rotating-key");
         try (Response response = handler.verify(signed)) {
@@ -208,9 +248,26 @@ class VerifyingHandlerTest {
                         .withExtension("cesignaturealg", "rsa256")
                         .withExtension("cekeyid", KEY_ID)
                         .withExtension("cecanonattrs", "source,type")
+                        .withExtension("cesignercluster", CLUSTER)
                         .build();
 
         try (Response response = handler.verify(wrongAlg)) {
+            assertEquals(403, response.getStatus());
+        }
+    }
+
+    @Test
+    void fiveExtensionCompletenessCheck() {
+        // Missing cesignercluster should be treated as unsigned
+        CloudEvent missingCluster =
+                CloudEventBuilder.from(Objects.requireNonNull(buildTestEvent()))
+                        .withExtension("cesignature", "dummysig")
+                        .withExtension("cesignaturealg", "ed25519")
+                        .withExtension("cekeyid", KEY_ID)
+                        .withExtension("cecanonattrs", "source,type")
+                        .build();
+
+        try (Response response = handler.verify(missingCluster)) {
             assertEquals(403, response.getStatus());
         }
     }
@@ -229,18 +286,26 @@ class VerifyingHandlerTest {
     }
 
     private CloudEvent signEvent(CloudEvent event) {
-        return signEventWithKeyId(event, KEY_ID);
+        return signEventWithKeyIdAndCluster(event, KEY_ID, CLUSTER);
     }
 
     private CloudEvent signEventWithKeyId(CloudEvent event, String keyId) {
-        byte[] canonical =
-                com.platform.cesigning.proxy.crypto.CanonicalForm.build(event, CANONICAL_ATTRS);
-        String signature = signer.signToBase64Url(canonical);
-        String presentAttrs =
-                com.platform.cesigning.proxy.crypto.CanonicalForm.presentAttributes(
-                        event, CANONICAL_ATTRS);
+        return signEventWithKeyIdAndCluster(event, keyId, CLUSTER);
+    }
 
-        return CloudEventBuilder.from(Objects.requireNonNull(event))
+    private CloudEvent signEventWithKeyIdAndCluster(
+            CloudEvent event, String keyId, String cluster) {
+        // Add cluster identity before building canonical form
+        CloudEvent eventWithCluster =
+                CloudEventBuilder.from(Objects.requireNonNull(event))
+                        .withExtension("cesignercluster", cluster)
+                        .build();
+
+        byte[] canonical = CanonicalForm.build(eventWithCluster, CANONICAL_ATTRS);
+        String signature = signer.signToBase64Url(canonical);
+        String presentAttrs = CanonicalForm.presentAttributes(eventWithCluster, CANONICAL_ATTRS);
+
+        return CloudEventBuilder.from(eventWithCluster)
                 .withExtension("cesignature", Objects.requireNonNull(signature))
                 .withExtension("cesignaturealg", "ed25519")
                 .withExtension("cekeyid", Objects.requireNonNull(keyId))
@@ -276,6 +341,11 @@ class VerifyingHandlerTest {
             }
 
             @Override
+            public String clusterName() {
+                return CLUSTER;
+            }
+
+            @Override
             public List<String> canonicalAttributes() {
                 return CANONICAL_ATTRS;
             }
@@ -284,8 +354,8 @@ class VerifyingHandlerTest {
             public VerifyConfig verify() {
                 return new VerifyConfig() {
                     @Override
-                    public Optional<List<String>> trustedNamespaces() {
-                        return Optional.of(new ArrayList<>(TRUSTED_NAMESPACES));
+                    public Optional<List<String>> trustedSources() {
+                        return Optional.of(new ArrayList<>(TRUSTED_SOURCES));
                     }
 
                     @Override

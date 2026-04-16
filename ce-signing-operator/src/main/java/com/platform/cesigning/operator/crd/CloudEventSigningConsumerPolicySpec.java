@@ -6,17 +6,17 @@ import java.util.List;
 
 public class CloudEventSigningConsumerPolicySpec {
 
-    private List<String> trustedNamespaces = new ArrayList<>();
+    private List<TrustedSource> trustedSources = new ArrayList<>();
     private boolean rejectUnsigned = true;
     private List<ConsumerTriggerEntry> consumers = new ArrayList<>();
     private ProxyConfig proxy = new ProxyConfig();
 
-    public List<String> getTrustedNamespaces() {
-        return trustedNamespaces;
+    public List<TrustedSource> getTrustedSources() {
+        return trustedSources;
     }
 
-    public void setTrustedNamespaces(List<String> trustedNamespaces) {
-        this.trustedNamespaces = trustedNamespaces;
+    public void setTrustedSources(List<TrustedSource> trustedSources) {
+        this.trustedSources = trustedSources;
     }
 
     public boolean isRejectUnsigned() {

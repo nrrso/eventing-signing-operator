@@ -25,12 +25,19 @@ public class SigningDeploymentDependentResource
 
     static final Set<String> RESERVED_ENV_KEYS =
             Set.of(
-                    "CE_SIGNING_MODE", "CE_SIGNING_KEY_ID",
-                    "CE_SIGNING_CANONICAL_ATTRS", "CE_SIGNING_PRIVATE_KEY_PATH");
+                    "CE_SIGNING_MODE",
+                    "CE_SIGNING_KEY_ID",
+                    "CE_SIGNING_CANONICAL_ATTRS",
+                    "CE_SIGNING_PRIVATE_KEY_PATH",
+                    "CE_CLUSTER_NAME");
 
     @Inject
     @ConfigProperty(name = "cesigning.proxy.image")
     String defaultProxyImage;
+
+    @Inject
+    @ConfigProperty(name = "cesigning.cluster.name")
+    String clusterName;
 
     public SigningDeploymentDependentResource() {
         super(Deployment.class);
@@ -102,6 +109,10 @@ public class SigningDeploymentDependentResource
                         .addNewEnv()
                         .withName("CE_SIGNING_PRIVATE_KEY_PATH")
                         .withValue("/var/run/ce-keys/private.pem")
+                        .endEnv()
+                        .addNewEnv()
+                        .withName("CE_CLUSTER_NAME")
+                        .withValue(clusterName)
                         .endEnv();
 
         proxy.getEnv().entrySet().stream()

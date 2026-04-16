@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import com.platform.cesigning.operator.config.OperatorMode;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicyStatus;
 import com.platform.cesigning.operator.crd.ProducerEntry;
@@ -37,6 +38,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @Workflow(
@@ -71,10 +73,20 @@ public class ProducerPolicyReconciler
 
     @Inject KubernetesClient client;
 
+    @Inject OperatorMode operatorMode;
+
+    @Inject
+    @ConfigProperty(name = "cesigning.cluster.name")
+    String clusterName;
+
     @Override
     public UpdateControl<CloudEventSigningProducerPolicy> reconcile(
             CloudEventSigningProducerPolicy resource,
             Context<CloudEventSigningProducerPolicy> context) {
+
+        if (!operatorMode.isLocal()) {
+            return UpdateControl.noUpdate();
+        }
 
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();
@@ -137,6 +149,7 @@ public class ProducerPolicyReconciler
             String publicKeyPem = new String(Base64.getDecoder().decode(encodedPub));
             boolean registryChanged =
                     publishToRegistry(
+                            clusterName,
                             namespace,
                             keyId,
                             publicKeyPem,
@@ -245,7 +258,11 @@ public class ProducerPolicyReconciler
                         }
                         List<PublicKeyEntry> entries =
                                 new ArrayList<>(registry.getSpec().getEntries());
-                        boolean removed = entries.removeIf(e -> namespace.equals(e.getNamespace()));
+                        boolean removed =
+                                entries.removeIf(
+                                        e ->
+                                                clusterName.equals(e.getCluster())
+                                                        && namespace.equals(e.getNamespace()));
                         if (removed) {
                             registry.getSpec().setEntries(entries);
                             LOG.infof("Removed registry entries for namespace %s", namespace);
@@ -302,6 +319,7 @@ public class ProducerPolicyReconciler
      * up expired entries. Returns true if the registry was actually modified.
      */
     private boolean publishToRegistry(
+            String cluster,
             String namespace,
             String keyId,
             String publicKeyPem,
@@ -323,7 +341,8 @@ public class ProducerPolicyReconciler
                     // Mark previous key as rotating (if rotation detected)
                     if (previousKeyId != null) {
                         for (PublicKeyEntry entry : entries) {
-                            if (namespace.equals(entry.getNamespace())
+                            if (cluster.equals(entry.getCluster())
+                                    && namespace.equals(entry.getNamespace())
                                     && previousKeyId.equals(entry.getKeyId())
                                     && "active".equals(entry.getStatus())) {
                                 entry.setStatus("rotating");
@@ -333,11 +352,12 @@ public class ProducerPolicyReconciler
                         }
                     }
 
-                    // Clean up expired entries for this namespace
+                    // Clean up expired entries for this cluster+namespace
                     var iterator = entries.iterator();
                     while (iterator.hasNext()) {
                         PublicKeyEntry entry = iterator.next();
-                        if (!namespace.equals(entry.getNamespace())) {
+                        if (!cluster.equals(entry.getCluster())
+                                || !namespace.equals(entry.getNamespace())) {
                             continue;
                         }
                         if ("rotating".equals(entry.getStatus()) && entry.getExpiresAt() != null) {
@@ -352,11 +372,12 @@ public class ProducerPolicyReconciler
                         }
                     }
 
-                    // Mark any stale active entries for this namespace as rotating.
+                    // Mark any stale active entries for this cluster+namespace as rotating.
                     // Handles double-rotation where previousKeyId label was overwritten
                     // before the first rotation's registry write succeeded.
                     for (PublicKeyEntry entry : entries) {
-                        if (namespace.equals(entry.getNamespace())
+                        if (cluster.equals(entry.getCluster())
+                                && namespace.equals(entry.getNamespace())
                                 && !keyId.equals(entry.getKeyId())
                                 && "active".equals(entry.getStatus())) {
                             entry.setStatus("rotating");
@@ -375,7 +396,8 @@ public class ProducerPolicyReconciler
                             entries.stream()
                                     .anyMatch(
                                             e ->
-                                                    namespace.equals(e.getNamespace())
+                                                    cluster.equals(e.getCluster())
+                                                            && namespace.equals(e.getNamespace())
                                                             && keyId.equals(e.getKeyId())
                                                             && publicKeyPem.equals(
                                                                     e.getPublicKeyPEM())
@@ -384,10 +406,11 @@ public class ProducerPolicyReconciler
                     if (!activeExists) {
                         entries.removeIf(
                                 e ->
-                                        namespace.equals(e.getNamespace())
+                                        cluster.equals(e.getCluster())
+                                                && namespace.equals(e.getNamespace())
                                                 && keyId.equals(e.getKeyId()));
                         PublicKeyEntry activeEntry =
-                                new PublicKeyEntry(namespace, keyId, publicKeyPem);
+                                new PublicKeyEntry(cluster, namespace, keyId, publicKeyPem);
                         activeEntry.setCreatedAt(now.toString());
                         activeEntry.setExpiresAt(now.plusDays(intervalDays).toString());
                         activeEntry.setStatus("active");

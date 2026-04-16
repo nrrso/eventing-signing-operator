@@ -21,6 +21,10 @@ public interface ProxyConfig {
     @WithDefault("default")
     String keyId();
 
+    @WithName("cluster-name")
+    @WithDefault("local")
+    String clusterName();
+
     @WithName("canonical-attributes")
     @WithDefault("type,source,subject,datacontenttype")
     List<String> canonicalAttributes();
@@ -28,8 +32,8 @@ public interface ProxyConfig {
     VerifyConfig verify();
 
     interface VerifyConfig {
-        @WithName("trusted-namespaces")
-        Optional<List<String>> trustedNamespaces();
+        @WithName("trusted-sources")
+        Optional<List<String>> trustedSources();
 
         @WithName("reject-unsigned")
         @WithDefault("true")

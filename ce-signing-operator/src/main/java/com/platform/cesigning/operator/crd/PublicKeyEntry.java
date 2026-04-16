@@ -3,6 +3,7 @@ package com.platform.cesigning.operator.crd;
 
 public class PublicKeyEntry {
 
+    private String cluster;
     private String namespace;
     private String keyId;
     private String publicKeyPEM;
@@ -13,10 +14,19 @@ public class PublicKeyEntry {
 
     public PublicKeyEntry() {}
 
-    public PublicKeyEntry(String namespace, String keyId, String publicKeyPEM) {
+    public PublicKeyEntry(String cluster, String namespace, String keyId, String publicKeyPEM) {
+        this.cluster = cluster;
         this.namespace = namespace;
         this.keyId = keyId;
         this.publicKeyPEM = publicKeyPEM;
+    }
+
+    public String getCluster() {
+        return cluster;
+    }
+
+    public void setCluster(String cluster) {
+        this.cluster = cluster;
     }
 
     public String getNamespace() {

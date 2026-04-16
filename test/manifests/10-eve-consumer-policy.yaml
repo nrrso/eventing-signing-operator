@@ -6,8 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: ce-signing-test
 spec:
-  trustedNamespaces:
-    - bu-alice
+  trustedSources:
+    - cluster: local
+      namespace: bu-alice
   rejectUnsigned: true
   consumers:
     - name: alice-event-consumer
