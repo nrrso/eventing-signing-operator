@@ -1,0 +1,53 @@
+{{- if .Values.federation.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-federation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ce-signing-operator
+    app.kubernetes.io/component: federation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-federation
+  labels:
+    app.kubernetes.io/name: ce-signing-operator
+    app.kubernetes.io/component: federation
+rules:
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["clusterfederationconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["clusterfederationconfigs/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-federation
+  labels:
+    app.kubernetes.io/name: ce-signing-operator
+    app.kubernetes.io/component: federation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-federation
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-federation
+    namespace: {{ .Release.Namespace }}
+{{- end }}

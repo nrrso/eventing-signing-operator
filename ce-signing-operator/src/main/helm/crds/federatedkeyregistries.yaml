@@ -1,0 +1,74 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: federatedkeyregistries.ce-signing.platform.io
+spec:
+  group: ce-signing.platform.io
+  scope: Cluster
+  names:
+    plural: federatedkeyregistries
+    singular: federatedkeyregistry
+    kind: FederatedKeyRegistry
+    shortNames: [cefkr]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                entries:
+                  type: array
+                  items:
+                    type: object
+                    required: [cluster, namespace, keyId, publicKeyPEM]
+                    properties:
+                      cluster:
+                        type: string
+                        description: "Remote cluster name that owns this key"
+                      namespace:
+                        type: string
+                        description: "Namespace of the CloudEventSigningProducerPolicy on the remote cluster"
+                      keyId:
+                        type: string
+                        description: "Unique key identifier"
+                      publicKeyPEM:
+                        type: string
+                        description: "PEM-encoded Ed25519 public key"
+                      algorithm:
+                        type: string
+                        default: ed25519
+                      createdAt:
+                        type: string
+                        format: date-time
+                      expiresAt:
+                        type: string
+                        format: date-time
+                      status:
+                        type: string
+                        enum: [active, rotating, expired]
+                        default: active
+            status:
+              type: object
+              properties:
+                lastSyncTime:
+                  type: string
+                  format: date-time
+                entryCount:
+                  type: integer
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Entries
+          type: integer
+          jsonPath: .status.entryCount
+        - name: Last Sync
+          type: date
+          jsonPath: .status.lastSyncTime
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

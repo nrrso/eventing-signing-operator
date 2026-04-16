@@ -1,0 +1,68 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterfederationconfigs.ce-signing.platform.io
+spec:
+  group: ce-signing.platform.io
+  scope: Cluster
+  names:
+    plural: clusterfederationconfigs
+    singular: clusterfederationconfig
+    kind: ClusterFederationConfig
+    shortNames: [cecfc]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                remoteClusters:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, kubeconfigSecretRef]
+                    properties:
+                      name:
+                        type: string
+                        description: "Name of the remote cluster"
+                      kubeconfigSecretRef:
+                        type: string
+                        description: "Name of the Secret containing kubeconfig for the remote cluster"
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      status: { type: string, enum: ["True", "False", "Unknown"] }
+                      reason: { type: string }
+                      message: { type: string }
+                      lastTransitionTime: { type: string, format: date-time }
+                remoteClusters:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      connectionState: { type: string, enum: [Connected, Disconnected, Error] }
+                      lastSyncTime: { type: string, format: date-time }
+                      entryCount: { type: integer }
+                      error: { type: string }
+                observedGeneration: { type: integer }
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: ".status.conditions[?(@.type=='Ready')].status"
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

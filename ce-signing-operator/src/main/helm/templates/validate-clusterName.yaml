@@ -1,0 +1,3 @@
+{{- if not .Values.app.clusterName }}
+{{- fail "clusterName is required. Set it via --set app.clusterName=<name>" }}
+{{- end }}

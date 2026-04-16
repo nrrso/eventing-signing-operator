@@ -17,11 +17,12 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jboss.logging.Logger;
 
 /**
- * Watches the cluster-scoped PublicKeyRegistry singleton and populates the RegistryKeyCache. Only
- * active in verify mode.
+ * Watches the cluster-scoped PublicKeyRegistry singleton and all FederatedKeyRegistry resources,
+ * populating the RegistryKeyCache with composite (cluster, keyId) keys. Only active in verify mode.
  */
 @ApplicationScoped
 public class RegistryWatcher {
@@ -29,11 +30,19 @@ public class RegistryWatcher {
     private static final Logger LOG = Logger.getLogger(RegistryWatcher.class);
     private static final String SINGLETON_NAME = "ce-signing-registry";
 
-    private static final ResourceDefinitionContext RDC =
+    private static final ResourceDefinitionContext PKR_RDC =
             new ResourceDefinitionContext.Builder()
                     .withGroup("ce-signing.platform.io")
                     .withVersion("v1alpha1")
                     .withPlural("publickeyregistries")
+                    .withNamespaced(false)
+                    .build();
+
+    private static final ResourceDefinitionContext FKR_RDC =
+            new ResourceDefinitionContext.Builder()
+                    .withGroup("ce-signing.platform.io")
+                    .withVersion("v1alpha1")
+                    .withPlural("federatedkeyregistries")
                     .withNamespaced(false)
                     .build();
 
@@ -43,7 +52,12 @@ public class RegistryWatcher {
 
     @Inject ProxyConfig config;
 
-    private SharedIndexInformer<GenericKubernetesResource> informer;
+    private SharedIndexInformer<GenericKubernetesResource> pkrInformer;
+    private SharedIndexInformer<GenericKubernetesResource> fkrInformer;
+
+    // Track entries by source to merge local and federated keys
+    private final ConcurrentHashMap<String, Map<RegistryKeyCache.CacheKey, PublicKeyEntry>>
+            entriesBySource = new ConcurrentHashMap<>();
 
     void onStart(@Observes StartupEvent ev) {
         if (!"verify".equals(config.mode())) {
@@ -51,66 +65,110 @@ public class RegistryWatcher {
         }
 
         LOG.info("Starting PublicKeyRegistry watcher");
-        informer =
-                client.genericKubernetesResources(RDC)
+        pkrInformer =
+                client.genericKubernetesResources(PKR_RDC)
                         .withName(SINGLETON_NAME)
                         .inform(
                                 new ResourceEventHandler<>() {
                                     @Override
                                     public void onAdd(GenericKubernetesResource resource) {
-                                        syncFromResource(resource);
+                                        syncFromResource("pkr", resource);
                                     }
 
                                     @Override
                                     public void onUpdate(
                                             GenericKubernetesResource oldResource,
                                             GenericKubernetesResource newResource) {
-                                        syncFromResource(newResource);
+                                        syncFromResource("pkr", newResource);
                                     }
 
                                     @Override
                                     public void onDelete(
                                             GenericKubernetesResource resource,
                                             boolean deletedFinalStateUnknown) {
-                                        keyCache.replaceAll(Map.of());
-                                        LOG.warn("PublicKeyRegistry deleted, cache cleared");
+                                        entriesBySource.remove("pkr");
+                                        mergeAndReplace();
+                                        LOG.warn(
+                                                "PublicKeyRegistry deleted, local entries cleared");
+                                    }
+                                },
+                                30_000L);
+
+        LOG.info("Starting FederatedKeyRegistry watcher");
+        fkrInformer =
+                client.genericKubernetesResources(FKR_RDC)
+                        .inform(
+                                new ResourceEventHandler<>() {
+                                    @Override
+                                    public void onAdd(GenericKubernetesResource resource) {
+                                        syncFromResource(fkrSourceKey(resource), resource);
+                                    }
+
+                                    @Override
+                                    public void onUpdate(
+                                            GenericKubernetesResource oldResource,
+                                            GenericKubernetesResource newResource) {
+                                        syncFromResource(fkrSourceKey(newResource), newResource);
+                                    }
+
+                                    @Override
+                                    public void onDelete(
+                                            GenericKubernetesResource resource,
+                                            boolean deletedFinalStateUnknown) {
+                                        entriesBySource.remove(fkrSourceKey(resource));
+                                        mergeAndReplace();
+                                        LOG.infof(
+                                                "FederatedKeyRegistry %s deleted, entries removed",
+                                                resource.getMetadata().getName());
                                     }
                                 },
                                 30_000L);
     }
 
     void onStop(@Observes ShutdownEvent ev) {
-        if (informer != null) {
-            informer.close();
+        if (pkrInformer != null) {
+            pkrInformer.close();
+        }
+        if (fkrInformer != null) {
+            fkrInformer.close();
         }
     }
 
+    private static String fkrSourceKey(GenericKubernetesResource resource) {
+        return "fkr:" + resource.getMetadata().getName();
+    }
+
     @SuppressWarnings("unchecked")
-    private void syncFromResource(GenericKubernetesResource resource) {
+    private void syncFromResource(String sourceKey, GenericKubernetesResource resource) {
         try {
             Map<String, Object> spec =
                     (Map<String, Object>) resource.getAdditionalProperties().get("spec");
             if (spec == null) {
-                keyCache.replaceAll(Map.of());
+                entriesBySource.put(sourceKey, Map.of());
+                mergeAndReplace();
                 return;
             }
 
             List<Map<String, Object>> entries = (List<Map<String, Object>>) spec.get("entries");
             if (entries == null || entries.isEmpty()) {
-                keyCache.replaceAll(Map.of());
+                entriesBySource.put(sourceKey, Map.of());
+                mergeAndReplace();
                 return;
             }
 
-            Map<String, PublicKeyEntry> parsed = new HashMap<>();
+            Map<RegistryKeyCache.CacheKey, PublicKeyEntry> parsed = new HashMap<>();
             for (Map<String, Object> entry : entries) {
                 try {
+                    String cluster = (String) entry.get("cluster");
                     String keyId = (String) entry.get("keyId");
                     String pem = (String) entry.get("publicKeyPEM");
                     var publicKey = EventVerifier.parsePublicKeyPem(pem);
 
+                    var cacheKey = new RegistryKeyCache.CacheKey(cluster, keyId);
                     parsed.put(
-                            keyId,
+                            cacheKey,
                             new PublicKeyEntry(
+                                    cluster,
                                     (String) entry.get("namespace"),
                                     keyId,
                                     publicKey,
@@ -123,10 +181,20 @@ public class RegistryWatcher {
                 }
             }
 
-            keyCache.replaceAll(parsed);
+            entriesBySource.put(sourceKey, parsed);
+            mergeAndReplace();
         } catch (Exception e) {
-            LOG.error("Failed to sync registry", e);
+            LOG.error("Failed to sync registry from " + sourceKey, e);
         }
+    }
+
+    private void mergeAndReplace() {
+        Map<RegistryKeyCache.CacheKey, PublicKeyEntry> merged = new HashMap<>();
+        for (Map<RegistryKeyCache.CacheKey, PublicKeyEntry> sourceEntries :
+                entriesBySource.values()) {
+            merged.putAll(sourceEntries);
+        }
+        keyCache.replaceAll(merged);
     }
 
     private static OffsetDateTime parseDateTime(Object value) {

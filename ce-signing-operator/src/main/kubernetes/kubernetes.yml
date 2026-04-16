@@ -25,6 +25,10 @@ rules:
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["clusterrolebindings"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # FederatedKeyRegistry (operator must hold this to grant it to verifier via ClusterRoleBinding)
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries"]
+    verbs: ["get", "list", "watch"]
   # Kubernetes Events (emitted by ErrorStatusHandler and EventHelper)
   - apiGroups: [""]
     resources: ["events"]
@@ -44,7 +48,7 @@ subjects:
     # Must match quarkus.kubernetes.namespace / CE_SIGNING_NAMESPACE at deploy time
     namespace: ce-signing-system
 ---
-# Verifier ClusterRole (read-only access to PublicKeyRegistry for proxy in verify mode)
+# Verifier ClusterRole (read-only access to PublicKeyRegistry and FederatedKeyRegistry for proxy in verify mode)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -52,4 +56,7 @@ metadata:
 rules:
   - apiGroups: ["ce-signing.platform.io"]
     resources: ["publickeyregistries"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries"]
     verbs: ["get", "list", "watch"]
