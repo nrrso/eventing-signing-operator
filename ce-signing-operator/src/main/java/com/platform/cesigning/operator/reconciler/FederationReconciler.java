@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.jboss.logging.Logger;
 
 @ControllerConfiguration(name = "federation-controller")
@@ -54,6 +55,8 @@ public class FederationReconciler implements Reconciler<ClusterFederationConfig>
     private final ConcurrentHashMap<String, RemoteClusterWatch> remoteWatches =
             new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> syncedStatus = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> syncRetryCounters =
+            new ConcurrentHashMap<>();
 
     @Override
     public UpdateControl<ClusterFederationConfig> reconcile(
@@ -258,9 +261,15 @@ public class FederationReconciler implements Reconciler<ClusterFederationConfig>
                     List.of(io.micrometer.core.instrument.Tag.of("cluster", clusterName)),
                     System.currentTimeMillis() / 1000.0);
 
+            syncRetryCounters.computeIfAbsent(clusterName, k -> new AtomicInteger()).set(0);
             LOG.infof("Synced %d entries from remote cluster %s", entries.size(), clusterName);
         } catch (Exception e) {
-            LOG.errorf(e, "Failed to sync from remote cluster %s", clusterName);
+            int attempt =
+                    syncRetryCounters
+                            .computeIfAbsent(clusterName, k -> new AtomicInteger())
+                            .incrementAndGet();
+            LOG.errorf(
+                    e, "Failed to sync from remote cluster %s (attempt %d)", clusterName, attempt);
         }
     }
 
@@ -322,6 +331,7 @@ public class FederationReconciler implements Reconciler<ClusterFederationConfig>
             watch.close();
         }
         syncedStatus.remove(clusterName);
+        syncRetryCounters.remove(clusterName);
 
         // Delete the FederatedKeyRegistry resource
         String resourceName = clusterName + "-keys";

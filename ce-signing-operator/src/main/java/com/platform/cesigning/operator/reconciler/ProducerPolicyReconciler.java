@@ -22,15 +22,20 @@ import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.javaoperatorsdk.operator.api.config.informer.InformerEventSourceConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusUpdateControl;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.api.reconciler.Workflow;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.Dependent;
+import io.javaoperatorsdk.operator.processing.event.ResourceID;
+import io.javaoperatorsdk.operator.processing.event.source.EventSource;
+import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import jakarta.inject.Inject;
 import java.net.HttpURLConnection;
 import java.time.OffsetDateTime;
@@ -38,6 +43,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -78,6 +84,25 @@ public class ProducerPolicyReconciler
     @Inject
     @ConfigProperty(name = "cesigning.cluster.name")
     String clusterName;
+
+    @Override
+    public List<EventSource<?, CloudEventSigningProducerPolicy>> prepareEventSources(
+            EventSourceContext<CloudEventSigningProducerPolicy> context) {
+        var pkrInformer =
+                new InformerEventSource<>(
+                        InformerEventSourceConfiguration.from(
+                                        PublicKeyRegistry.class,
+                                        CloudEventSigningProducerPolicy.class)
+                                .withSecondaryToPrimaryMapper(
+                                        pkr ->
+                                                context.getPrimaryCache()
+                                                        .list()
+                                                        .map(ResourceID::fromResource)
+                                                        .collect(Collectors.toSet()))
+                                .build(),
+                        context);
+        return List.of(pkrInformer);
+    }
 
     @Override
     public UpdateControl<CloudEventSigningProducerPolicy> reconcile(

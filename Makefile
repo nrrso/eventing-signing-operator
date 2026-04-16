@@ -83,16 +83,18 @@ prometheus-crds:
 	kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/$(PROM_OP_VERSION)/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
 
 bootstrap-registry:
-	@kubectl apply -f - <<< '{"apiVersion":"ce-signing.platform.io/v1alpha1","kind":"PublicKeyRegistry","metadata":{"name":"ce-signing-registry"},"spec":{"entries":[]}}' 2>/dev/null || true
+	@kubectl --context kind-$(CLUSTER) apply -f - <<< '{"apiVersion":"ce-signing.platform.io/v1alpha1","kind":"PublicKeyRegistry","metadata":{"name":"ce-signing-registry"},"spec":{"entries":[]}}' 2>/dev/null || true
 
 install: bootstrap-registry
 	helm install $(HELM_RELEASE) $(CHART_PATH) \
+		--kube-context kind-$(CLUSTER) \
 		-f test/values-local.yaml \
 		-n $(NAMESPACE) --create-namespace \
 		--wait --timeout 2m
 
 upgrade: bootstrap-registry
 	helm upgrade $(HELM_RELEASE) $(CHART_PATH) \
+		--kube-context kind-$(CLUSTER) \
 		-f test/values-local.yaml \
 		-n $(NAMESPACE) \
 		--wait --timeout 2m
@@ -178,8 +180,9 @@ federation-secret:
 		--dry-run=client -o yaml | kubectl --context kind-$(CLUSTER) apply -f -
 
 upgrade-federation: bootstrap-registry
-	kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/$(PROM_OP_VERSION)/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+	kubectl --context kind-$(CLUSTER) apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/$(PROM_OP_VERSION)/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
 	helm upgrade --install $(HELM_RELEASE) $(CHART_PATH) \
+		--kube-context kind-$(CLUSTER) \
 		-f test/values-local.yaml \
 		-f test/values-federation.yaml \
 		-n $(NAMESPACE) --create-namespace \
@@ -190,9 +193,9 @@ apply-federation:
 	kubectl --context kind-$(CLUSTER) apply -f test/manifests/federation/cluster-federation-config.yaml
 
 status-federation:
-	@echo "=== Federation Pod ===" && kubectl get pods -n $(NAMESPACE) -l app.kubernetes.io/component=federation 2>/dev/null && echo ""
-	@echo "=== ClusterFederationConfig ===" && kubectl get clusterfederationconfig ce-signing-federation -o yaml 2>/dev/null || echo "(not created yet)" && echo ""
-	@echo "=== FederatedKeyRegistry ===" && kubectl get federatedkeyregistry 2>/dev/null || echo "(none yet)"
+	@echo "=== Federation Pod ===" && kubectl --context kind-$(CLUSTER) get pods -n $(NAMESPACE) -l app.kubernetes.io/component=federation 2>/dev/null && echo ""
+	@echo "=== ClusterFederationConfig ===" && kubectl --context kind-$(CLUSTER) get clusterfederationconfig ce-signing-federation -o yaml 2>/dev/null || echo "(not created yet)" && echo ""
+	@echo "=== FederatedKeyRegistry ===" && kubectl --context kind-$(CLUSTER) get federatedkeyregistry 2>/dev/null || echo "(none yet)"
 
 clean-federation:
 	kind delete cluster --name $(REMOTE_CLUSTER) 2>/dev/null || true

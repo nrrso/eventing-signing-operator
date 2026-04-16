@@ -7,8 +7,10 @@ import com.platform.cesigning.operator.crd.ClusterFederationConfig;
 import com.platform.cesigning.operator.crd.ClusterFederationConfigSpec;
 import com.platform.cesigning.operator.crd.ClusterFederationConfigStatus;
 import com.platform.cesigning.operator.crd.RemoteClusterEntry;
+import com.platform.cesigning.operator.health.FederationReadinessCheck;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import java.util.List;
+import org.eclipse.microprofile.health.Readiness;
 import org.junit.jupiter.api.Test;
 
 class FederationReconcilerTest {
@@ -66,5 +68,13 @@ class FederationReconcilerTest {
         assertTrue(status.setCondition("Ready", "True", "AllConnected", "All connected"));
         assertFalse(status.setCondition("Ready", "True", "AllConnected", "All connected"));
         assertTrue(status.setCondition("Ready", "False", "NotReady", "Not all connected"));
+    }
+
+    @Test
+    void federationReadinessCheckDoesNotGateReadiness() {
+        assertFalse(
+                FederationReadinessCheck.class.isAnnotationPresent(Readiness.class),
+                "FederationReadinessCheck must not have @Readiness — sync status should not gate"
+                        + " pod readiness");
     }
 }

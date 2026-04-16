@@ -30,6 +30,12 @@ spec:
               value: {{ .Values.clusterName | quote }}
             - name: CE_SIGNING_NAMESPACE
               value: {{ .Release.Namespace | quote }}
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_PRODUCERPOLICYRECONCILER_ENABLED
+              value: "false"
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_CONSUMERPOLICYRECONCILER_ENABLED
+              value: "false"
+            - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEY_ROTATION_CONTROLLER_ENABLED
+              value: "false"
           ports:
             - containerPort: 8080
               name: http
