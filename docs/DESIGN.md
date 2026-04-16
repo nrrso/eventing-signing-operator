@@ -77,11 +77,13 @@ The platform introduces two components deployed via a Kubernetes operator:
 
 2. **Verifying Proxy** — an HTTP service injected as a Knative Sequence step after a Trigger. It intercepts inbound CloudEvents, verifies the Ed25519 signature against a cluster-wide public key registry, and rejects events that fail verification (HTTP 403) or are unsigned (configurable).
 
-The operator manages three Custom Resource Definitions:
+The operator manages five Custom Resource Definitions:
 
 - **CloudEventSigningProducerPolicy** (namespace-scoped) — declares which producers should sign events, which attributes to include in the signature, and key rotation policy.
-- **CloudEventSigningConsumerPolicy** (namespace-scoped) — declares which namespaces a consumer trusts, whether to reject unsigned events, and how to route verified events to subscribers.
-- **PublicKeyRegistry** (cluster-scoped singleton) — distributes public keys from all producer namespaces to all verifiers. Only the ProducerPolicyReconciler writes to this resource.
+- **CloudEventSigningConsumerPolicy** (namespace-scoped) — declares which `(cluster, namespace)` sources a consumer trusts, whether to reject unsigned events, and how to route verified events to subscribers.
+- **PublicKeyRegistry** (cluster-scoped singleton) — distributes local public keys from all producer namespaces to all verifiers. Only the ProducerPolicyReconciler writes to this resource.
+- **ClusterFederationConfig** (cluster-scoped singleton, name: `federation`) — declares remote clusters and their kubeconfig secret references for cross-cluster key distribution. Only used when federation is enabled.
+- **FederatedKeyRegistry** (cluster-scoped, one per remote cluster, name: `{clusterName}-keys`) — stores public keys pulled from a remote cluster's `PublicKeyRegistry`. Only the FederationReconciler writes to this resource.
 
 **Key design principles:**
 - **Namespace is the trust boundary** — one keypair per namespace, not per service, keeping key management simple.
@@ -144,8 +146,9 @@ metadata:
   name: verification-policy
   namespace: bu-bob
 spec:
-  trustedNamespaces:
-    - bu-alice
+  trustedSources:
+    - cluster: cluster-east
+      namespace: bu-alice
   rejectUnsigned: true
   consumers:
     - name: order-consumer
@@ -171,7 +174,8 @@ metadata:
   name: ce-signing-registry
 spec:
   entries:
-    - namespace: bu-alice
+    - cluster: cluster-east
+      namespace: bu-alice
       keyId: bu-alice-v1
       publicKeyPEM: |
         -----BEGIN PUBLIC KEY-----
@@ -183,7 +187,64 @@ spec:
       expiresAt: "2025-04-15T10:00:00Z"
 ```
 
-Each entry is uniquely identified by `(namespace, keyId)`. Only one `active` entry per namespace.
+Each entry is uniquely identified by `(cluster, namespace, keyId)`. Only one `active` entry per `(cluster, namespace)`. The verifier cache uses a composite key `(cluster, keyId)` for lookup.
+
+#### ClusterFederationConfig (cluster-scoped singleton, federation only)
+
+```yaml
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: ClusterFederationConfig
+metadata:
+  name: federation
+spec:
+  remoteClusters:
+    - name: cluster-west
+      kubeconfigSecretRef:
+        name: cluster-west-kubeconfig
+        namespace: ce-signing-system
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+  remoteClusters:
+    - name: cluster-west
+      connected: true
+      lastSyncTime: "2025-06-01T12:00:00Z"
+      entriesSynced: 3
+```
+
+Singleton named `federation`. Declares remote clusters for key federation. Only meaningful when `federation.enabled: true` in Helm values.
+
+#### FederatedKeyRegistry (cluster-scoped, one per remote cluster)
+
+```yaml
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: FederatedKeyRegistry
+metadata:
+  name: cluster-west-keys
+spec:
+  cluster: cluster-west
+  entries:
+    - cluster: cluster-west
+      namespace: bu-payments
+      keyId: bu-payments-v1
+      publicKeyPEM: |
+        -----BEGIN PUBLIC KEY-----
+        MCowBQYDK2VwAyEA...
+        -----END PUBLIC KEY-----
+      algorithm: ed25519
+      status: active
+      createdAt: "2025-05-01T10:00:00Z"
+      expiresAt: "2025-08-01T10:00:00Z"
+status:
+  conditions:
+    - type: Synced
+      status: "True"
+  lastSyncTime: "2025-06-01T12:00:00Z"
+  entriesSynced: 1
+```
+
+One resource per remote cluster, named `{clusterName}-keys`. Only the FederationReconciler writes to this CRD. The verifier watches both `PublicKeyRegistry` and `FederatedKeyRegistry` and merges them into a single cache.
 
 ### Signing Flow
 
@@ -201,10 +262,11 @@ Knative Sequence (step 1: ce-signer)
   |     d. Append "data=" + JCS-canonicalized JSON (RFC 8785)
   |  3. Ed25519 sign canonical bytes (BouncyCastle, 64-byte signature)
   |  4. Add extension attributes:
-  |     - cesignature:    base64url-encoded 64-byte signature
-  |     - cesignaturealg: "ed25519"
-  |     - cekeyid:        key identifier (e.g., "bu-alice-v1")
-  |     - cecanonattrs:   sorted comma-separated list of signed attributes
+  |     - cesignature:      base64url-encoded 64-byte signature
+  |     - cesignaturealg:   "ed25519"
+  |     - cekeyid:          key identifier (e.g., "bu-alice-v1")
+  |     - cecanonattrs:     sorted comma-separated list of signed attributes
+  |     - cesignercluster:  signing cluster name (always present, always signed)
   |  5. Return signed CloudEvent (HTTP binary content mode)
   |
   v
@@ -222,11 +284,11 @@ Knative Trigger (filter match)
   v
 Knative Sequence (step 1: ce-verifier)
   |
-  |  1. Check all 4 signature extensions present
+  |  1. Check all 5 signature extensions present
   |     (partial = treat as unsigned -> reject if rejectUnsigned)
-  |  2. Lookup cekeyid in RegistryKeyCache (in-memory, Watch-synced)
+  |  2. Lookup (cesignercluster, cekeyid) in RegistryKeyCache (in-memory, Watch-synced)
   |  3. Check key status is "active" or "rotating"
-  |  4. Check key's source namespace is in trustedNamespaces
+  |  4. Check key's (cluster, namespace) is in trustedSources
   |  5. Rebuild canonical form using cecanonattrs + event data
   |  6. Verify Ed25519 signature against public key
   |  7. Valid:   return HTTP 200 (signatures preserved)
@@ -269,6 +331,8 @@ Sequence step 2 -> Subscriber (application service)
 | Untrusted namespace | Verification fails with HTTP 403 |
 | Registry write conflict (409) | ProducerPolicyReconciler retries with optimistic concurrency (max 3 attempts) |
 | Partial signature extensions | Event treated as unsigned; rejected if `rejectUnsigned: true` |
+| Federation Watch disconnected | Federation controller serves from cached `FederatedKeyRegistry`; reconnects automatically |
+| Federated key propagation delay | Revoked remote keys may remain trusted until Watch event propagates (AP consistency) |
 
 ### Security Properties
 
@@ -287,7 +351,7 @@ Sequence step 2 -> Subscriber (application service)
 
 ```
 ce-signing-platform/
-  pom.xml                           # Parent POM (Java 21, Quarkus 3.15.1)
+  pom.xml                           # Parent POM (Java 21, Quarkus 3.33.1)
   ce-signing-proxy/                 # HTTP signing/verification service
     src/main/java/
       com/platform/cesigning/proxy/
@@ -336,8 +400,8 @@ ce-signing-platform/
 
 | Library | Version | Purpose |
 |---------|---------|---------|
-| Quarkus | 3.15.1 | Application framework |
-| JOSDK | 6.8.4 | Operator SDK |
+| Quarkus | 3.33.1 | Application framework |
+| JOSDK | 7.7.3 | Operator SDK |
 | Fabric8 | (managed by Quarkus) | Kubernetes client |
 | BouncyCastle | 1.78 | Ed25519 cryptography |
 | CloudEvents SDK | 4.0.1 | CloudEvent parsing/serialization |
@@ -357,9 +421,9 @@ mvn verify -Dquarkus.container-image.build=true \
            -Dquarkus.container-image.push=true \
            -Dquarkus.container-image.registry=ghcr.io
 
-# Install operator via generated Helm chart
+# Install operator via Helm chart
 helm install ce-signing \
-  ce-signing-operator/target/helm/kubernetes/ce-signing-operator/ \
+  ce-signing-operator/charts/ce-signing-operator/ \
   -n ce-signing-system --create-namespace
 ```
 
@@ -392,7 +456,7 @@ helm install ce-signing \
 - Verifying proxy: liveness + readiness (gates on `isSynced()` for registry Watch)
 - Operator: liveness + readiness
 
-**Alerting (Prometheus rules in `deploy/prometheus-rules.yaml`):**
+**Alerting (Prometheus rules in `test/manifests/prometheus-rules.yaml`):**
 - Key approaching expiration without rotation
 - Registry Watch desync
 - Elevated rejection rate
