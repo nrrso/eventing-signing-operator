@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ce-signing-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+---
+# Operator ClusterRole: full permissions for all reconcilers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ce-signing-operator
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+rules:
+  # ProducerPolicy CRD (ProducerPolicyReconciler + KeyRotationReconciler)
+  - apiGroups: ["ce-signing.platform.io"]
+    resources:
+      - cloudeventsigningproducerpolicies
+      - cloudeventsigningproducerpolicies/status
+      - cloudeventsigningproducerpolicies/finalizers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ConsumerPolicy CRD (ConsumerPolicyReconciler)
+  - apiGroups: ["ce-signing.platform.io"]
+    resources:
+      - cloudeventsigningconsumerpolicies
+      - cloudeventsigningconsumerpolicies/status
+      - cloudeventsigningconsumerpolicies/finalizers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ClusterFederationConfig CRD (FederationReconciler)
+  - apiGroups: ["ce-signing.platform.io"]
+    resources:
+      - clusterfederationconfigs
+      - clusterfederationconfigs/status
+      - clusterfederationconfigs/finalizers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # PublicKeyRegistry (managed by ProducerPolicyReconciler in reconcile())
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["publickeyregistries"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # FederatedKeyRegistry (read by verifier proxy; written by federation controller)
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries", "federatedkeyregistries/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Deployments (dependent resources for signing/verifying proxies)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Services (dependent resources)
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Secrets (keypair storage — create-only for key material safety)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create"]
+  # ServiceAccounts (for verifier proxy)
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ClusterRoleBindings (for verifier proxy RBAC)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Knative Sequences (managed by ProducerPolicyReconciler)
+  - apiGroups: ["flows.knative.dev"]
+    resources: ["sequences"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Knative Triggers (managed by ConsumerPolicyReconciler)
+  - apiGroups: ["eventing.knative.dev"]
+    resources: ["triggers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ServiceMonitors (dependent resources)
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # HPA (dependent resources)
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # PDB (dependent resources)
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Kubernetes Events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "create", "update", "patch"]
+  # CRD validation (JOSDK startup check)
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ce-signing-operator
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ce-signing-operator
+subjects:
+  - kind: ServiceAccount
+    name: ce-signing-operator
+    namespace: {{ .Release.Namespace }}
+---
+# Verifier ClusterRole: read-only access for proxy pods in verify mode
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ce-signing-verifier
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["publickeyregistries"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["ce-signing.platform.io"]
+    resources: ["federatedkeyregistries"]
+    verbs: ["get", "list", "watch"]
+---
+# View RoleBinding for operator namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ce-signing-operator-view
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: ce-signing-operator
+    namespace: {{ .Release.Namespace }}

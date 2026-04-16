@@ -1,0 +1,19 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ce-signing-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "ce-signing-operator.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - scheme: http
+      targetPort: 8080
+      path: /q/metrics
+      interval: 10s
+      honorLabels: true
+{{- end }}

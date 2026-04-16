@@ -123,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: helm-chart
-          path: ce-signing-operator/target/helm/kubernetes/ce-signing-operator/
+          path: ce-signing-operator/charts/ce-signing-operator/
 
   provenance-ce-signing-proxy:
     needs: build-ce-signing-proxy

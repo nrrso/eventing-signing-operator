@@ -1,0 +1,30 @@
+image: ghcr.io/nrrso/ce-signing-operator:latest
+proxyImage: ghcr.io/nrrso/ce-signing-proxy:latest
+clusterName: ""
+
+logLevel: INFO
+
+otel:
+  endpoint: http://localhost:4317
+  serviceName: ce-signing-operator
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+federation:
+  enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+serviceMonitor:
+  enabled: true

@@ -1,4 +1,3 @@
-app:
-  image: localhost:5001/public/ce-signing-operator:dev
-  envs:
-    CE_SIGNING_PROXY_IMAGE: localhost:5001/public/ce-signing-proxy:dev
+clusterName: local
+image: localhost:5001/public/ce-signing-operator:dev
+proxyImage: localhost:5001/public/ce-signing-proxy:dev

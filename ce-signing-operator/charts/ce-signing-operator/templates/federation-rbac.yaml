@@ -1,0 +1,29 @@
+{{- if .Values.federation.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-federation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: federation
+---
+# Federation pod runs the same binary with OPERATOR_MODE=FEDERATION.
+# JOSDK registers all reconcilers at startup (they no-op if mode doesn't match),
+# so the federation SA needs the same RBAC as the main operator.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-federation
+  labels:
+    {{- include "ce-signing-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: federation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ce-signing-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-federation
+    namespace: {{ .Release.Namespace }}
+{{- end }}

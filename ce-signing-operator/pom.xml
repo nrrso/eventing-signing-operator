@@ -57,13 +57,6 @@
             <artifactId>quarkus-container-image-jib</artifactId>
         </dependency>
 
-        <!-- Helm Chart Generation -->
-        <dependency>
-            <groupId>io.quarkiverse.helm</groupId>
-            <artifactId>quarkus-helm</artifactId>
-            <version>${quarkus-helm.version}</version>
-        </dependency>
-
         <!-- Testing -->
         <dependency>
             <groupId>io.quarkus</groupId>
