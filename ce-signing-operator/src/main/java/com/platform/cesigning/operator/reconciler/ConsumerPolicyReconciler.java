@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import com.platform.cesigning.operator.config.OperatorMode;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicy;
 import com.platform.cesigning.operator.crd.CloudEventSigningConsumerPolicyStatus;
 import com.platform.cesigning.operator.crd.ConsumerTriggerEntry;
@@ -52,10 +53,16 @@ public class ConsumerPolicyReconciler
 
     @Inject KubernetesClient client;
 
+    @Inject OperatorMode operatorMode;
+
     @Override
     public UpdateControl<CloudEventSigningConsumerPolicy> reconcile(
             CloudEventSigningConsumerPolicy resource,
             Context<CloudEventSigningConsumerPolicy> context) {
+
+        if (!operatorMode.isLocal()) {
+            return UpdateControl.noUpdate();
+        }
 
         String namespace = resource.getMetadata().getNamespace();
         String name = resource.getMetadata().getName();

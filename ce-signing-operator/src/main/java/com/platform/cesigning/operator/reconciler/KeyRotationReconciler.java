@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.platform.cesigning.operator.reconciler;
 
+import com.platform.cesigning.operator.config.OperatorMode;
 import com.platform.cesigning.operator.crd.CloudEventSigningProducerPolicy;
 import com.platform.cesigning.operator.crd.KeyRotationPolicy;
 import com.platform.cesigning.operator.crypto.KeyPairGenerator;
@@ -35,6 +36,8 @@ public class KeyRotationReconciler implements Reconciler<CloudEventSigningProduc
 
     @Inject KubernetesClient client;
 
+    @Inject OperatorMode operatorMode;
+
     private TimerEventSource<CloudEventSigningProducerPolicy> timerEventSource;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -62,6 +65,10 @@ public class KeyRotationReconciler implements Reconciler<CloudEventSigningProduc
     public UpdateControl<CloudEventSigningProducerPolicy> reconcile(
             CloudEventSigningProducerPolicy resource,
             Context<CloudEventSigningProducerPolicy> context) {
+
+        if (!operatorMode.isLocal()) {
+            return UpdateControl.noUpdate();
+        }
 
         String namespace = resource.getMetadata().getNamespace();
         KeyRotationPolicy rotation = resource.getSpec().getKeyRotation();
