@@ -1,0 +1,8 @@
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: ClusterFederationConfig
+metadata:
+  name: ce-signing-federation
+spec:
+  remoteClusters:
+    - name: remote
+      kubeconfigSecretRef: remote-cluster-kubeconfig

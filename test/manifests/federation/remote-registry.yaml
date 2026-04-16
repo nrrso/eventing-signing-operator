@@ -1,0 +1,13 @@
+apiVersion: ce-signing.platform.io/v1alpha1
+kind: PublicKeyRegistry
+metadata:
+  name: ce-signing-registry
+spec:
+  entries:
+    - cluster: remote
+      namespace: bu-remote-alice
+      keyId: bu-remote-alice-v1
+      publicKeyPEM: "MCowBQYDK2VwAyEAsyntheticKeyForTestingOnly000000000000000="
+      algorithm: ed25519
+      createdAt: "2026-04-16T00:00:00Z"
+      status: active
