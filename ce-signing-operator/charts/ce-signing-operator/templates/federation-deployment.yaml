@@ -23,6 +23,7 @@ spec:
       containers:
         - name: federation-controller
           image: {{ .Values.image }}
+          imagePullPolicy: Always
           env:
             - name: OPERATOR_MODE
               value: "FEDERATION"

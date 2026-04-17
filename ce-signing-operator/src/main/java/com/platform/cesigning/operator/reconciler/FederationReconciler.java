@@ -10,6 +10,7 @@ import com.platform.cesigning.operator.crd.FederatedKeyRegistryStatus;
 import com.platform.cesigning.operator.crd.PublicKeyEntry;
 import com.platform.cesigning.operator.crd.PublicKeyRegistry;
 import com.platform.cesigning.operator.crd.RemoteClusterEntry;
+import com.platform.cesigning.operator.crypto.PemValidator;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.Config;
@@ -299,7 +300,7 @@ public class FederationReconciler implements Reconciler<ClusterFederationConfig>
                     client.resources(FederatedKeyRegistry.class).resource(fkr).update();
                 }
 
-                // Update status
+                // Validate entries and update status
                 FederatedKeyRegistry forStatus =
                         client.resources(FederatedKeyRegistry.class).withName(resourceName).get();
                 if (forStatus != null) {
@@ -310,6 +311,32 @@ public class FederationReconciler implements Reconciler<ClusterFederationConfig>
                     }
                     fkrStatus.setLastSyncTime(OffsetDateTime.now(ZoneOffset.UTC).toString());
                     fkrStatus.setEntryCount(entries.size());
+
+                    // Validate each entry's PEM
+                    List<FederatedKeyRegistryStatus.InvalidEntry> invalid = new ArrayList<>();
+                    for (PublicKeyEntry entry : entries) {
+                        PemValidator.Result result =
+                                PemValidator.validatePublicKeyPem(entry.getPublicKeyPEM());
+                        if (!result.valid()) {
+                            invalid.add(
+                                    new FederatedKeyRegistryStatus.InvalidEntry(
+                                            entry.getKeyId(), result.error()));
+                            LOG.warnf(
+                                    "Invalid PEM for key %s in %s: %s",
+                                    entry.getKeyId(), resourceName, result.error());
+                        }
+                    }
+                    fkrStatus.setInvalidEntries(invalid);
+
+                    int validCount = entries.size() - invalid.size();
+                    String countMsg = validCount + " of " + entries.size() + " entries valid";
+                    fkrStatus.setCondition("Ready", "True", "Synced", countMsg);
+                    if (invalid.isEmpty()) {
+                        fkrStatus.setCondition("KeysValid", "True", "AllValid", countMsg);
+                    } else {
+                        fkrStatus.setCondition("KeysValid", "False", "InvalidEntries", countMsg);
+                    }
+
                     client.resources(FederatedKeyRegistry.class).resource(forStatus).patchStatus();
                 }
                 return;

@@ -7,7 +7,10 @@ spec:
     - cluster: remote
       namespace: bu-remote-alice
       keyId: bu-remote-alice-v1
-      publicKeyPEM: "MCowBQYDK2VwAyEAsyntheticKeyForTestingOnly000000000000000="
+      publicKeyPEM: |
+        -----BEGIN PUBLIC KEY-----
+        MCowBQYDK2VwAyEA0V75vQP7ll75xIggyEoUVFCpMh2GdrnlOakYyKilto4=
+        -----END PUBLIC KEY-----
       algorithm: ed25519
       createdAt: "2026-04-16T00:00:00Z"
       status: active

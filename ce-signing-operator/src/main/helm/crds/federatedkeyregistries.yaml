@@ -60,6 +60,30 @@ spec:
                   format: date-time
                 entryCount:
                   type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                invalidEntries:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      keyId:
+                        type: string
+                      reason:
+                        type: string
       subresources:
         status: {}
       additionalPrinterColumns:
