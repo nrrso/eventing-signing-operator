@@ -29,7 +29,7 @@
         <quarkus.platform.version>3.33.1</quarkus.platform.version>
         <quarkus-operator-sdk.version>7.7.4</quarkus-operator-sdk.version>
         <cloudevents.version>4.0.2</cloudevents.version>
-        <bouncycastle.version>1.78</bouncycastle.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
         <json-canonicalization.version>1.1</json-canonicalization.version>
         <surefire-plugin.version>3.5.5</surefire-plugin.version>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
