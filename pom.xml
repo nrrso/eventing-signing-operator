@@ -34,7 +34,7 @@
         <surefire-plugin.version>3.5.5</surefire-plugin.version>
         <compiler-plugin.version>3.15.0</compiler-plugin.version>
         <spotless-plugin.version>2.46.1</spotless-plugin.version>
-        <enforcer-plugin.version>3.5.0</enforcer-plugin.version>
+        <enforcer-plugin.version>3.6.2</enforcer-plugin.version>
     </properties>
 
     <dependencyManagement>
