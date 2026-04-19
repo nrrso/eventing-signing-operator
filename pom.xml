@@ -33,7 +33,7 @@
         <json-canonicalization.version>1.1</json-canonicalization.version>
         <surefire-plugin.version>3.5.5</surefire-plugin.version>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
-        <spotless-plugin.version>2.44.4</spotless-plugin.version>
+        <spotless-plugin.version>2.46.1</spotless-plugin.version>
         <enforcer-plugin.version>3.5.0</enforcer-plugin.version>
     </properties>
 
