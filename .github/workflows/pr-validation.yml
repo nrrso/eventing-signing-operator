@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: read
     container:
-      image: maven:3.9.9-eclipse-temurin-21
+      image: maven:3.9.14-eclipse-temurin-21
     steps:
       - uses: actions/checkout@v4
 
