@@ -1,4 +1,4 @@
-name: Build and Publish
+name: Release
 
 on:
   push:
@@ -10,31 +10,51 @@ env:
   REGISTRY: ghcr.io
   REGISTRY_GROUP: ${{ github.repository }}
 
+permissions:
+  contents: read
+
 jobs:
-  detect-changes:
+  release:
+    name: Semantic Release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      issues: write
+      pull-requests: write
     outputs:
-      proxy: ${{ steps.filter.outputs.proxy }}
-      operator: ${{ steps.filter.outputs.operator }}
+      released: ${{ steps.semantic.outputs.released }}
+      version: ${{ steps.semantic.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
-        id: filter
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          filters: |
-            proxy:
-              - 'ce-signing-proxy/**'
-              - 'pom.xml'
-            operator:
-              - 'ce-signing-operator/**'
-              - 'pom.xml'
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Install dependencies
+        run: npm clean-install
+
+      - name: Run semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release
+          if [ -f .release-version ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "version=$(cat .release-version)" >> "$GITHUB_OUTPUT"
+          fi
 
   build-ce-signing-proxy:
+    name: Build ce-signing-proxy
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.proxy == 'true' || github.event_name == 'workflow_dispatch'
+    needs: release
+    if: needs.release.outputs.released == 'true'
     permissions:
       contents: read
       packages: write
@@ -62,8 +82,8 @@ jobs:
           -Dquarkus.container-image.registry=${{ env.REGISTRY }}
           -Dquarkus.container-image.group=${{ env.REGISTRY_GROUP }}
           -Dquarkus.container-image.name=ce-signing-proxy
-          -Dquarkus.container-image.tag=${{ github.sha }}
-          -Dquarkus.container-image.additional-tags=latest
+          -Dquarkus.container-image.tag=${{ needs.release.outputs.version }}
+          -Dquarkus.container-image.additional-tags=latest,${{ github.sha }}
           -Dquarkus.container-image.username=${{ github.actor }}
           -Dquarkus.container-image.password=${{ secrets.GITHUB_TOKEN }}
 
@@ -76,9 +96,10 @@ jobs:
         run: echo "digest=$(cat ce-signing-proxy/target/jib-image.digest)" >> "$GITHUB_OUTPUT"
 
   build-ce-signing-operator:
+    name: Build ce-signing-operator
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.operator == 'true' || github.event_name == 'workflow_dispatch'
+    needs: release
+    if: needs.release.outputs.released == 'true'
     permissions:
       contents: read
       packages: write
@@ -106,8 +127,8 @@ jobs:
           -Dquarkus.container-image.registry=${{ env.REGISTRY }}
           -Dquarkus.container-image.group=${{ env.REGISTRY_GROUP }}
           -Dquarkus.container-image.name=ce-signing-operator
-          -Dquarkus.container-image.tag=${{ github.sha }}
-          -Dquarkus.container-image.additional-tags=latest
+          -Dquarkus.container-image.tag=${{ needs.release.outputs.version }}
+          -Dquarkus.container-image.additional-tags=latest,${{ github.sha }}
           -Dquarkus.container-image.username=${{ github.actor }}
           -Dquarkus.container-image.password=${{ secrets.GITHUB_TOKEN }}
 
@@ -154,8 +175,9 @@ jobs:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   publish-helm-chart:
+    name: Publish Helm chart
     runs-on: ubuntu-latest
-    needs: build-ce-signing-operator
+    needs: [release, build-ce-signing-operator]
     permissions:
       packages: write
     container:
@@ -171,7 +193,7 @@ jobs:
         run: helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package Helm chart
-        run: helm package ce-signing-operator/ --version 1.0.0-${{ github.sha }}
+        run: helm package ce-signing-operator/ --version ${{ needs.release.outputs.version }} --app-version ${{ needs.release.outputs.version }}
 
       - name: Push Helm chart
-        run: helm push ce-signing-operator-1.0.0-${{ github.sha }}.tgz oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}
+        run: helm push ce-signing-operator-${{ needs.release.outputs.version }}.tgz oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}

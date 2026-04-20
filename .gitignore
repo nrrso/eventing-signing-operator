@@ -30,6 +30,10 @@ skills-lock.json
 CLAUDE.md
 AGENTS.md
 
+# Node.js (semantic-release tooling)
+node_modules/
+.release-version
+
 # Quarkus
 .quarkus/
 
