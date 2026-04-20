@@ -120,7 +120,7 @@ jobs:
         run: echo "digest=$(cat ce-signing-operator/target/jib-image.digest)" >> "$GITHUB_OUTPUT"
 
       - name: Upload Helm chart artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: helm-chart
           path: ce-signing-operator/charts/ce-signing-operator/
@@ -162,7 +162,7 @@ jobs:
       image: alpine/helm:3.20.2
     steps:
       - name: Download Helm chart artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: helm-chart
           path: ce-signing-operator/
