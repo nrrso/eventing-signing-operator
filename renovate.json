@@ -22,17 +22,24 @@
     {
       "groupName": "quarkus",
       "matchManagers": ["maven"],
-      "matchPackagePrefixes": ["io.quarkus"]
+      "matchPackageNames": [
+        "io.quarkus{/,}**"
+      ]
     },
     {
       "groupName": "cloudevents",
       "matchManagers": ["maven"],
-      "matchPackagePrefixes": ["io.cloudevents"]
+      "matchPackageNames": [
+        "io.cloudevents{/,}**"
+      ]
     },
     {
       "groupName": "operator-sdk",
       "matchManagers": ["maven"],
-      "matchPackagePrefixes": ["io.javaoperatorsdk", "io.quarkiverse.operatorsdk"]
+      "matchPackageNames": [
+        "io.javaoperatorsdk{/,}**",
+        "io.quarkiverse.operatorsdk{/,}**"
+      ]
     }
   ]
 }
