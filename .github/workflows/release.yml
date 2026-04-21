@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      rebuild-version:
+        description: 'Rebuild and push images from an existing git tag (e.g. 1.0.0). Skips semantic-release.'
+        type: string
       promote-version:
         description: 'Promote existing GHCR images to Docker Hub (e.g. 1.2.0). Skips release and build.'
         type: string
@@ -26,8 +29,9 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      released: ${{ steps.semantic.outputs.released }}
-      version: ${{ steps.semantic.outputs.version }}
+      released: ${{ steps.semantic.outputs.released || steps.rebuild.outputs.released }}
+      version: ${{ steps.semantic.outputs.version || steps.rebuild.outputs.version }}
+      git-sha: ${{ steps.semantic.outputs.git-sha || steps.rebuild.outputs.git-sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -35,16 +39,27 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Resolve rebuild version
+        id: rebuild
+        if: inputs.rebuild-version != ''
+        run: |
+          echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "version=${{ inputs.rebuild-version }}" >> "$GITHUB_OUTPUT"
+          echo "git-sha=$(git rev-parse v${{ inputs.rebuild-version }})" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
+        if: inputs.rebuild-version == ''
         uses: actions/setup-node@v6
         with:
           node-version: "lts/*"
 
       - name: Install dependencies
+        if: inputs.rebuild-version == ''
         run: npm clean-install
 
       - name: Run semantic-release
         id: semantic
+        if: inputs.rebuild-version == ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -52,6 +67,7 @@ jobs:
           if [ -f .release-version ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "version=$(cat .release-version)" >> "$GITHUB_OUTPUT"
+            echo "git-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
   build-ce-signing-proxy:
@@ -69,6 +85,8 @@ jobs:
       digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
 
       - name: Cache Maven repository
         uses: actions/cache@v5
@@ -87,7 +105,7 @@ jobs:
           -Dquarkus.container-image.group=${{ env.REGISTRY_GROUP }}
           -Dquarkus.container-image.name=ce-signing-proxy
           -Dquarkus.container-image.tag=${{ needs.release.outputs.version }}
-          -Dquarkus.container-image.additional-tags=latest,${{ github.sha }}
+          -Dquarkus.container-image.additional-tags=latest,${{ needs.release.outputs.git-sha }}
           -Dquarkus.container-image.username=${{ github.actor }}
           -Dquarkus.container-image.password=${{ secrets.GITHUB_TOKEN }}
 
@@ -114,6 +132,8 @@ jobs:
       digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
 
       - name: Cache Maven repository
         uses: actions/cache@v5
@@ -132,7 +152,7 @@ jobs:
           -Dquarkus.container-image.group=${{ env.REGISTRY_GROUP }}
           -Dquarkus.container-image.name=ce-signing-operator
           -Dquarkus.container-image.tag=${{ needs.release.outputs.version }}
-          -Dquarkus.container-image.additional-tags=latest,${{ github.sha }}
+          -Dquarkus.container-image.additional-tags=latest,${{ needs.release.outputs.git-sha }}
           -Dquarkus.container-image.username=${{ github.actor }}
           -Dquarkus.container-image.password=${{ secrets.GITHUB_TOKEN }}
 
@@ -214,6 +234,43 @@ jobs:
           crane copy \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}/ce-signing-operator:${{ env.PROMOTE_VERSION }} \
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ce-signing-operator:latest
+
+  update-release-notes:
+    name: Update release notes
+    runs-on: ubuntu-latest
+    needs: [release, build-ce-signing-proxy, build-ce-signing-operator]
+    permissions:
+      contents: write
+    steps:
+      - name: Append container images to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          PROXY_IMAGE="${{ needs.build-ce-signing-proxy.outputs.image }}"
+          PROXY_DIGEST="${{ needs.build-ce-signing-proxy.outputs.digest }}"
+          OPERATOR_IMAGE="${{ needs.build-ce-signing-operator.outputs.image }}"
+          OPERATOR_DIGEST="${{ needs.build-ce-signing-operator.outputs.digest }}"
+
+          gh release view "v${VERSION}" --repo "${{ github.repository }}" --json body -q .body > body.md
+
+          cat >> body.md <<EOF
+
+          ## Container Images
+
+          \`\`\`
+          docker pull ${PROXY_IMAGE}:${VERSION}@${PROXY_DIGEST}
+          docker pull ${OPERATOR_IMAGE}:${VERSION}@${OPERATOR_DIGEST}
+          \`\`\`
+
+          ## Helm Chart
+
+          \`\`\`bash
+          helm install ce-signing-operator oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}/ce-signing-operator --version ${VERSION}
+          \`\`\`
+          EOF
+
+          gh release edit "v${VERSION}" --repo "${{ github.repository }}" --notes-file body.md
 
   publish-helm-chart:
     name: Publish Helm chart
