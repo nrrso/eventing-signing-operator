@@ -184,6 +184,25 @@ kubectl get cescp -A          # Consumer policies
 kubectl get cepkr             # Public key registry
 ```
 
+## Verifying Image Provenance
+
+Container images are built with [SLSA Level 3](https://slsa.dev/) provenance attestations. You can verify them using [`slsa-verifier`](https://github.com/slsa-framework/slsa-verifier):
+
+```bash
+# Install slsa-verifier (or use mise: mise install)
+go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
+
+# Verify ce-signing-proxy (use digest from GHCR package page)
+slsa-verifier verify-image ghcr.io/nrrso/eventing-signing-operator/ce-signing-proxy@sha256:<digest> \
+  --source-uri github.com/nrrso/eventing-signing-operator
+
+# Verify ce-signing-operator
+slsa-verifier verify-image ghcr.io/nrrso/eventing-signing-operator/ce-signing-operator@sha256:<digest> \
+  --source-uri github.com/nrrso/eventing-signing-operator
+```
+
+> **Note:** `slsa-verifier` requires an immutable digest reference (`@sha256:...`), not a mutable tag (`:1.0.0`). You can find the digest on the [GHCR package page](https://github.com/orgs/nrrso/packages?repo_name=eventing-signing-operator) or via `docker inspect --format='{{index .RepoDigests 0}}'`.
+
 ## Documentation
 
 - [Architecture overview](docs/ARCHITECTURE.md)
