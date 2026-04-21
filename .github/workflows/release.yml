@@ -266,7 +266,7 @@ jobs:
           ## Helm Chart
 
           \`\`\`bash
-          helm install ce-signing-operator oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}/ce-signing-operator --version ${VERSION}
+          helm install ce-signing-operator oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}/charts/ce-signing-operator --version ${VERSION}
           \`\`\`
           EOF
 
@@ -294,4 +294,4 @@ jobs:
         run: helm package ce-signing-operator/ --version ${{ needs.release.outputs.version }} --app-version ${{ needs.release.outputs.version }}
 
       - name: Push Helm chart
-        run: helm push ce-signing-operator-${{ needs.release.outputs.version }}.tgz oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}
+        run: helm push ce-signing-operator-${{ needs.release.outputs.version }}.tgz oci://${{ env.REGISTRY }}/${{ env.REGISTRY_GROUP }}/charts
