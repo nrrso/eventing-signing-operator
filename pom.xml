@@ -26,7 +26,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <quarkus.platform.version>3.35.1</quarkus.platform.version>
+        <quarkus.platform.version>3.35.2</quarkus.platform.version>
         <quarkus-operator-sdk.version>7.7.4</quarkus-operator-sdk.version>
         <cloudevents.version>4.0.2</cloudevents.version>
         <bouncycastle.version>1.84</bouncycastle.version>
