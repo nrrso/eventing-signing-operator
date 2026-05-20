@@ -1,3 +1,9 @@
+## [1.0.5](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.4...v1.0.5) (2026-05-20)
+
+### Bug Fixes
+
+* **deps:** update dependency io.quarkiverse.operatorsdk:quarkus-operator-sdk to v7.7.5 ([#45](https://github.com/nrrso/eventing-signing-operator/issues/45)) ([2960c6c](https://github.com/nrrso/eventing-signing-operator/commit/2960c6c452258292ef41ce5a43411d8d5c437fe9))
+
 ## [1.0.4](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.3...v1.0.4) (2026-05-13)
 
 ### Bug Fixes
