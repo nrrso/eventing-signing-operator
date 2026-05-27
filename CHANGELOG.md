@@ -1,3 +1,9 @@
+## [1.0.7](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.6...v1.0.7) (2026-05-27)
+
+### Bug Fixes
+
+* **deps:** update quarkus to v3.36.0 ([#48](https://github.com/nrrso/eventing-signing-operator/issues/48)) ([73ec30a](https://github.com/nrrso/eventing-signing-operator/commit/73ec30adfd9f2023999f8b97e6c8d2a1edb50e21))
+
 ## [1.0.6](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.5...v1.0.6) (2026-05-20)
 
 ### Bug Fixes
