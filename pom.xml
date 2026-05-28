@@ -28,7 +28,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <quarkus.platform.version>3.36.0</quarkus.platform.version>
         <quarkus-operator-sdk.version>7.7.5</quarkus-operator-sdk.version>
-        <cloudevents.version>4.0.2</cloudevents.version>
+        <cloudevents.version>4.1.0</cloudevents.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <json-canonicalization.version>1.1</json-canonicalization.version>
         <surefire-plugin.version>3.5.6</surefire-plugin.version>
