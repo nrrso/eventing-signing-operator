@@ -1,3 +1,9 @@
+## [1.0.10](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.9...v1.0.10) (2026-06-09)
+
+### Bug Fixes
+
+* **deps:** update cloudevents to v4.1.1 ([#56](https://github.com/nrrso/eventing-signing-operator/issues/56)) ([03592f3](https://github.com/nrrso/eventing-signing-operator/commit/03592f32c914025ada3b721f4298cb99deb21706))
+
 ## [1.0.9](https://github.com/nrrso/eventing-signing-operator/compare/v1.0.8...v1.0.9) (2026-06-03)
 
 ### Bug Fixes
