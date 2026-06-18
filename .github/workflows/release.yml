@@ -34,7 +34,7 @@ jobs:
       git-sha: ${{ steps.semantic.outputs.git-sha || steps.rebuild.outputs.git-sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -84,7 +84,7 @@ jobs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.digest.outputs.digest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: v${{ needs.release.outputs.version }}
 
@@ -131,7 +131,7 @@ jobs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.digest.outputs.digest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: v${{ needs.release.outputs.version }}
 
