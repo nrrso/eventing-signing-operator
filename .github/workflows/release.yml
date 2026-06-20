@@ -279,7 +279,7 @@ jobs:
     permissions:
       packages: write
     container:
-      image: alpine/helm:3.20.2
+      image: alpine/helm:3.21.2
     steps:
       - name: Download Helm chart artifact
         uses: actions/download-artifact@v8
