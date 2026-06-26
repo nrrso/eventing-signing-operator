@@ -209,7 +209,7 @@ jobs:
       PROMOTE_VERSION: ${{ needs.release.outputs.version || inputs.promote-version }}
     steps:
       - name: Install crane
-        uses: imjasonh/setup-crane@v0.5
+        uses: imjasonh/setup-crane@v0.7
 
       - name: Login to GHCR
         run: crane auth login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
